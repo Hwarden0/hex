@@ -136,6 +136,7 @@ function showScenario(caseObj, scenario, s) {
 
   // Commands
   console.log(chalk.gray('  ─── COMMANDS ─────────────────────────────────────────'));
+  console.log(`  ${chalk.cyan('hex answer')}    ${chalk.gray('—')} ${chalk.white('Record your findings (interactive)')}`);
   console.log(`  ${chalk.cyan('hex status')}    ${chalk.gray('—')} ${chalk.white('Check objective progress')}`);
   console.log(`  ${chalk.cyan('hex hint')}      ${chalk.gray('—')} ${chalk.white('Get a hint (-5pts each)')}`);
   console.log(`  ${chalk.cyan('hex submit')}    ${chalk.gray('—')} ${chalk.white('Submit your findings')}`);

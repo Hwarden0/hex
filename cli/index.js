@@ -51,6 +51,14 @@ program
   });
 
 program
+  .command('answer [caseId] [key] [value]')
+  .description('Record your findings for an objective (interactive if no args given)')
+  .action(async (caseId, key, value) => {
+    const { run } = require('./commands/answer');
+    await run(caseId, key, value);
+  });
+
+program
   .command('hint')
   .description('Get a hint for the current case (-5 points per hint)')
   .action(async () => {
