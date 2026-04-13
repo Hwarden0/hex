@@ -54,7 +54,7 @@ const COMMON_USERS = [
 ];
 const SERVICE_USERS = ['appuser','deploy','monitor','backup','jenkins','ansible','nagios','zabbix'];
 const ADMIN_USERS = ['sysadmin','root','admin','administrator','netops','secops'];
-const BRUTE_FORCE_USERS = ['root','admin','ubuntu','oracle','postgres','pi','test','guest','administrator','support','user','mysql','www-data','ftpuser'];
+const BRUTE_FORCE_USERS = ['root','admin','root','ubuntu','oracle','postgres','root','pi','test','guest','root','administrator','support','user','root','mysql','www-data','ftpuser'];
 
 // ─── Key=Value formatter ─────────────────────────────────────────────────────
 // Converts an object to a space-separated key=value string.

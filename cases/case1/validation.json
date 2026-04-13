@@ -2,7 +2,7 @@
   "objectives": {
     "attacker_ip": {
       "type": "ip",
-      "value": "10.0.0.100",
+      "value": "40.80.148.42",
       "weight": 30
     },
     "failed_count": {

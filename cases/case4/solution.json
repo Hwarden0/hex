@@ -1,6 +1,6 @@
 {
   "attacker_ip": "10.0.0.200",
   "accounts_targeted": 45,
-  "spray_password": "Winter2024!",
+  "failure_substatus": "0xC000006A",
   "spray_success": "no"
 }

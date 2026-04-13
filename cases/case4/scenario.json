@@ -31,9 +31,9 @@
     },
     {
       "id": "obj3",
-      "label": "Identify the password used in the spray (common weak password)",
+      "label": "What is the failure sub_status code across all spray attempts?",
       "points": 25,
-      "answer_key": "spray_password"
+      "answer_key": "failure_substatus"
     },
     {
       "id": "obj4",
@@ -43,13 +43,14 @@
     }
   ],
   "hints": [
-    "Password spraying produces low counts per user but high distinct user counts from one IP",
-    "Use: ... | stats dc(user) as unique_users, count by src_ip | where unique_users > 20",
-    "Look for the pattern: many users, 1-2 failures each, from same source",
-    "Check for any 'Accepted' events from the same attacker IP after the spray"
+    "Start with: index=hex_lab sourcetype=hex_case4_wineventlog event_id=4625 | head 20",
+    "Use: index=hex_lab sourcetype=hex_case4_wineventlog event_id=4625 | stats dc(user) by src_ip | sort -dc",
+    "The sub_status field indicates why authentication failed — 0xC000006A means wrong password",
+    "Check for any 4624 (success) events from the same attacker IP"
   ],
   "splunk_queries": [
-    "index=hex_lab sourcetype=hex_case4_* | head 50",
-    "index=hex_lab sourcetype=hex_case4_* \"Failed password\" | rex field=_raw \"for (?<user>\\w+) from (?<src_ip>[\\d.]+)\" | stats dc(user) as targets, count by src_ip | sort -targets"
+    "index=hex_lab sourcetype=hex_case4_wineventlog event_id=4625 | stats dc(user) as targets, count by src_ip | sort -targets",
+    "index=hex_lab sourcetype=hex_case4_wineventlog event_id=4625 src_ip=10.0.0.200 | stats count by sub_status",
+    "index=hex_lab sourcetype=hex_case4_wineventlog event_id=4624 src_ip=10.0.0.200"
   ]
 }
