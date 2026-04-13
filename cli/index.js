@@ -91,4 +91,14 @@ program
     await run(caseId, opts);
   });
 
+program
+  .command('kill')
+  .description('⚠  DESTROY the lab environment (Splunk index + local data)')
+  .option('--splunk-path <path>', 'Path to the Splunk binary (auto-detected if omitted)')
+  .option('-f, --force', 'Skip all confirmation prompts (DANGEROUS)')
+  .action(async (opts) => {
+    const { run } = require('./commands/kill');
+    await run(null, opts);
+  });
+
 module.exports = { program };
