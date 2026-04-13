@@ -44,6 +44,7 @@ You need Node.js once to build the binary. After that, `hex` runs standalone -- 
 | `hex score` | View your scores and overall level |
 | `hex rank` | View the global leaderboard rankings |
 | `hex reset [case_id]` | Reset progress on a specific case or all cases |
+| `hex kill` | ⚠ Destroy the entire lab environment (Splunk index + local data) |
 
 ## Investigation Cases
 
