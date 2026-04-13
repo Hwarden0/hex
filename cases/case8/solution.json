@@ -1,0 +1,6 @@
+{
+  "pivot_account": "svc_account",
+  "initial_host": "web-server-01",
+  "pivot_sequence": "web-server-01,db-server-01,admin-server-01",
+  "final_host": "admin-server-01"
+}

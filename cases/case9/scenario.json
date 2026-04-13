@@ -1,0 +1,56 @@
+{
+  "id": "case9",
+  "title": "Beaconing and C2 Detection",
+  "alert": {
+    "target": "workstation-05",
+    "type": "Periodic Outbound Connection Pattern",
+    "severity": "HIGH"
+  },
+  "story": [
+    "Network behavioral analytics flagged a workstation making highly periodic",
+    "outbound connections to the same external IP address.",
+    "",
+    "Malware implants commonly 'beacon' — check in with C2 servers at regular",
+    "intervals to receive commands and report status. The regularity of the",
+    "intervals is the key detection signal.",
+    "",
+    "Analyze the network logs. Find the infected host, the C2 server,",
+    "and determine the precise beacon interval."
+  ],
+  "objectives": [
+    {
+      "id": "obj1",
+      "label": "Identify the infected internal host",
+      "points": 20,
+      "answer_key": "infected_host"
+    },
+    {
+      "id": "obj2",
+      "label": "Identify the C2 server IP address",
+      "points": 25,
+      "answer_key": "c2_ip"
+    },
+    {
+      "id": "obj3",
+      "label": "What is the beacon interval in seconds?",
+      "points": 30,
+      "answer_key": "beacon_interval"
+    },
+    {
+      "id": "obj4",
+      "label": "What port does the C2 communicate on?",
+      "points": 25,
+      "answer_key": "c2_port"
+    }
+  ],
+  "hints": [
+    "Beaconing detection: look for the same src/dst pair with very consistent time deltas",
+    "Use: ... | sort _time | streamstats window=2 last(_time) as prev | eval delta=_time-prev | stats stdev(delta) by dst",
+    "Low standard deviation of time deltas = beaconing behavior",
+    "The beacon interval is exactly 60 seconds with very low jitter"
+  ],
+  "splunk_queries": [
+    "index=hex_lab sourcetype=hex_case9_* | head 50",
+    "index=hex_lab sourcetype=hex_case9_* | rex field=_raw \"SRC=(?<src>[\\d.]+).*DST=(?<dst>[\\d.]+).*DPT=(?<dpt>\\d+)\" | where NOT match(dst, \"^10\\.\") | stats count, dc(src) by dst, dpt | sort -count"
+  ]
+}

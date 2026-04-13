@@ -1,0 +1,56 @@
+{
+  "id": "case8",
+  "title": "Lateral Movement Across Hosts",
+  "alert": {
+    "target": "enterprise-network",
+    "type": "Multi-Host Authentication Anomaly",
+    "severity": "CRITICAL"
+  },
+  "story": [
+    "Threat hunting query flagged an unusual pattern: a service account that normally",
+    "only authenticates to a single host has been seen authenticating to multiple",
+    "hosts in sequence over a 30-minute window.",
+    "",
+    "This pattern is consistent with lateral movement — an attacker using compromised",
+    "credentials to hop between systems, expanding access across the network.",
+    "",
+    "Reconstruct the attack path and identify all pivoted hosts."
+  ],
+  "objectives": [
+    {
+      "id": "obj1",
+      "label": "Identify the compromised service account used for pivoting",
+      "points": 25,
+      "answer_key": "pivot_account"
+    },
+    {
+      "id": "obj2",
+      "label": "Identify the initial compromised host (first hop)",
+      "points": 25,
+      "answer_key": "initial_host"
+    },
+    {
+      "id": "obj3",
+      "label": "List the pivot sequence (comma-separated hostnames in order)",
+      "points": 30,
+      "answer_key": "pivot_sequence"
+    },
+    {
+      "id": "obj4",
+      "label": "What was the final target host?",
+      "points": 20,
+      "answer_key": "final_host"
+    }
+  ],
+  "hints": [
+    "Correlate auth logs across multiple hosts — look for svc_account logins",
+    "Sort events by time to reconstruct the movement sequence",
+    "Each hop comes from the PREVIOUS host's IP, not the attacker's original IP",
+    "Use: index=hex_lab sourcetype=hex_case8_* svc_account | sort _time | table _time, host, _raw"
+  ],
+  "splunk_queries": [
+    "index=hex_lab sourcetype=hex_case8_* | head 50",
+    "index=hex_lab sourcetype=hex_case8_* svc_account | sort _time | table _time, host, _raw",
+    "index=hex_lab sourcetype=hex_case8_* \"Accepted\" | rex field=_raw \"for (?<user>\\w+) from (?<src_ip>[\\d.]+)\" | table _time, host, user, src_ip | sort _time"
+  ]
+}

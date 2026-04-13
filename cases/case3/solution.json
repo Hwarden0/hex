@@ -1,0 +1,6 @@
+{
+  "suspicious_user": "dbadmin",
+  "services_accessed": "ssh,mysql,ftp",
+  "first_activity_time": "02:14",
+  "data_exfil": "yes"
+}

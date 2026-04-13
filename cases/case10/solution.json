@@ -1,0 +1,7 @@
+{
+  "initial_vector": "sql injection",
+  "vulnerability_class": "sqli",
+  "persistence_mechanism": "webshell",
+  "attack_stages": "initial-access,execution,persistence,privilege-escalation,lateral-movement,exfiltration",
+  "exfil_destination": "185.220.101.55"
+}

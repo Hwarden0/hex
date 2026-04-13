@@ -1,0 +1,21 @@
+{
+  "objectives": {
+    "src_ip": { "type": "ip", "value": "10.0.0.25", "weight": 20 },
+    "dst_ip": { "type": "ip", "value": "185.220.101.42", "weight": 25 },
+    "dst_port": {
+      "type": "string",
+      "value": "4444",
+      "aliases": ["4444", "tcp/4444"],
+      "weight": 25
+    },
+    "bytes_transferred": {
+      "type": "integer",
+      "value": 1547862400,
+      "tolerance": 15,
+      "weight": 30
+    }
+  },
+  "query_patterns": ["index=hex_lab", "SRC=", "stats sum"],
+  "min_time_seconds": 300,
+  "anti_cheat": { "min_time": 180, "flag_if_all_correct_under": 120 }
+}

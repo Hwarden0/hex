@@ -1,0 +1,9 @@
+{
+  "id": "case1",
+  "title": "SSH Brute Force Attack",
+  "difficulty": "beginner",
+  "category": "Authentication",
+  "tags": ["ssh", "brute-force", "authentication", "linux"],
+  "estimatedTime": 20,
+  "points": 100
+}

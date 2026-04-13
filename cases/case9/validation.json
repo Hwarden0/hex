@@ -1,0 +1,26 @@
+{
+  "objectives": {
+    "infected_host": {
+      "type": "string",
+      "value": "workstation-05",
+      "aliases": ["workstation-05", "ws05", "workstation05"],
+      "weight": 20
+    },
+    "c2_ip": { "type": "ip", "value": "45.142.212.100", "weight": 25 },
+    "beacon_interval": {
+      "type": "integer",
+      "value": 60,
+      "tolerance": 10,
+      "weight": 30
+    },
+    "c2_port": {
+      "type": "string",
+      "value": "8080",
+      "aliases": ["8080", "tcp/8080", "http-alt"],
+      "weight": 25
+    }
+  },
+  "query_patterns": ["index=hex_lab", "DST=", "stats"],
+  "min_time_seconds": 420,
+  "anti_cheat": { "min_time": 300, "flag_if_all_correct_under": 180 }
+}

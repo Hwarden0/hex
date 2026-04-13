@@ -1,0 +1,29 @@
+{
+  "objectives": {
+    "pivot_account": { "type": "string", "value": "svc_account", "weight": 25 },
+    "initial_host": {
+      "type": "string",
+      "value": "web-server-01",
+      "aliases": ["web-server-01", "web01", "webserver01"],
+      "weight": 25
+    },
+    "pivot_sequence": {
+      "type": "ordered_list",
+      "value": ["web-server-01", "db-server-01", "admin-server-01"],
+      "aliases": [
+        "web-server-01,db-server-01,admin-server-01",
+        "web01,db01,admin01"
+      ],
+      "weight": 30
+    },
+    "final_host": {
+      "type": "string",
+      "value": "admin-server-01",
+      "aliases": ["admin-server-01", "admin01", "adminserver01"],
+      "weight": 20
+    }
+  },
+  "query_patterns": ["index=hex_lab", "svc_account", "sort _time"],
+  "min_time_seconds": 420,
+  "anti_cheat": { "min_time": 300, "flag_if_all_correct_under": 180 }
+}

@@ -1,0 +1,6 @@
+{
+  "compromised_user": "jsmith",
+  "attacker_ip": "10.0.0.55",
+  "failed_before_success": 5,
+  "ip_class": "internal"
+}

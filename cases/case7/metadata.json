@@ -1,0 +1,9 @@
+{
+  "id": "case7",
+  "title": "Suspicious Outbound Traffic — Data Exfiltration",
+  "difficulty": "intermediate",
+  "category": "Exfiltration",
+  "tags": ["exfiltration", "network", "firewall", "data-loss"],
+  "estimatedTime": 35,
+  "points": 150
+}

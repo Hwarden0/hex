@@ -1,0 +1,26 @@
+{
+  "objectives": {
+    "suspicious_user": { "type": "string", "value": "dbadmin", "weight": 20 },
+    "services_accessed": {
+      "type": "set",
+      "value": ["ssh", "mysql", "ftp"],
+      "aliases": ["ssh,mysql,ftp", "ftp,mysql,ssh", "ssh,ftp,mysql"],
+      "weight": 30
+    },
+    "first_activity_time": {
+      "type": "time_hhmm",
+      "value": "02:14",
+      "tolerance_minutes": 5,
+      "weight": 25
+    },
+    "data_exfil": {
+      "type": "boolean_text",
+      "value": "yes",
+      "aliases": ["yes", "true", "y", "1", "affirmative"],
+      "weight": 25
+    }
+  },
+  "query_patterns": ["index=hex_lab", "dbadmin"],
+  "min_time_seconds": 240,
+  "anti_cheat": { "min_time": 180, "flag_if_all_correct_under": 120 }
+}

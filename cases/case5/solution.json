@@ -1,0 +1,6 @@
+{
+  "escalating_user": "webuser",
+  "escalation_binary": "vim",
+  "root_command": "/bin/bash",
+  "entry_vector": "ssh"
+}

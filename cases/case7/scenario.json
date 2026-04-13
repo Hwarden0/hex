@@ -1,0 +1,54 @@
+{
+  "id": "case7",
+  "title": "Suspicious Outbound Traffic — Data Exfiltration",
+  "alert": {
+    "target": "data-server-01",
+    "type": "Anomalous Outbound Data Volume",
+    "severity": "CRITICAL"
+  },
+  "story": [
+    "Network monitoring flagged an unusually large volume of outbound traffic from",
+    "an internal database server to an external IP address.",
+    "",
+    "The destination IP has no business justification, and the transfer occurred",
+    "during off-hours. Total data transferred is in the gigabyte range.",
+    "",
+    "Identify the internal source, external destination, protocol, and volume."
+  ],
+  "objectives": [
+    {
+      "id": "obj1",
+      "label": "Identify the internal source IP",
+      "points": 20,
+      "answer_key": "src_ip"
+    },
+    {
+      "id": "obj2",
+      "label": "Identify the external destination IP",
+      "points": 25,
+      "answer_key": "dst_ip"
+    },
+    {
+      "id": "obj3",
+      "label": "What port/protocol was used?",
+      "points": 25,
+      "answer_key": "dst_port"
+    },
+    {
+      "id": "obj4",
+      "label": "Total bytes transferred (approximate, within 10%)",
+      "points": 30,
+      "answer_key": "bytes_transferred"
+    }
+  ],
+  "hints": [
+    "Firewall logs show src/dst pairs with byte counts",
+    "Use: index=hex_lab sourcetype=hex_case7_* | rex ... | stats sum(bytes) by dst_ip",
+    "The transfer used a non-standard port — not 80 or 443",
+    "Filter by destination NOT in RFC1918 private ranges to find external traffic"
+  ],
+  "splunk_queries": [
+    "index=hex_lab sourcetype=hex_case7_* | head 50",
+    "index=hex_lab sourcetype=hex_case7_* | rex field=_raw \"SRC=(?<src>[\\d.]+).*DST=(?<dst>[\\d.]+).*DPT=(?<dpt>\\d+).*LEN=(?<len>\\d+)\" | stats sum(len) as total_bytes by src, dst, dpt | sort -total_bytes"
+  ]
+}

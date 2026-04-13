@@ -1,0 +1,56 @@
+{
+  "id": "case6",
+  "title": "Persistence via Cron Job",
+  "alert": {
+    "target": "app-server-03",
+    "type": "Scheduled Task Modification Detected",
+    "severity": "HIGH"
+  },
+  "story": [
+    "File integrity monitoring has detected a modification to /etc/cron.d/.",
+    "A new cron entry was added by an account that should not have write access",
+    "to system cron directories.",
+    "",
+    "This is a common attacker technique: establish persistence by registering a",
+    "malicious scheduled task that survives reboots and evades manual inspection.",
+    "",
+    "Identify the malicious cron entry, its schedule, and the payload it executes."
+  ],
+  "objectives": [
+    {
+      "id": "obj1",
+      "label": "Identify the filename of the malicious cron file",
+      "points": 20,
+      "answer_key": "cron_file"
+    },
+    {
+      "id": "obj2",
+      "label": "What is the cron schedule expression?",
+      "points": 25,
+      "answer_key": "cron_schedule"
+    },
+    {
+      "id": "obj3",
+      "label": "What script/command does the cron job execute?",
+      "points": 30,
+      "answer_key": "cron_command"
+    },
+    {
+      "id": "obj4",
+      "label": "Which user account created the cron entry?",
+      "points": 25,
+      "answer_key": "created_by"
+    }
+  ],
+  "hints": [
+    "Check both /etc/cron.d/ and user crontab events in the logs",
+    "File writes to /tmp/ during the same session are suspicious",
+    "The cron schedule uses @reboot or a specific minute/hour pattern",
+    "Correlate cron log events with the auth log to find who was logged in"
+  ],
+  "splunk_queries": [
+    "index=hex_lab sourcetype=hex_case6_* | head 50",
+    "index=hex_lab sourcetype=hex_case6_* cron | sort _time | table _time, sourcetype, _raw",
+    "index=hex_lab sourcetype=hex_case6_* (/tmp/ OR crontab OR cron.d) | sort _time"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "id": "case2",
+  "title": "Failed vs Successful Login Correlation",
+  "difficulty": "beginner",
+  "category": "Authentication",
+  "tags": ["credential-stuffing", "account-compromise", "correlation"],
+  "estimatedTime": 25,
+  "points": 100
+}

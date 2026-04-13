@@ -1,0 +1,56 @@
+{
+  "id": "case5",
+  "title": "Privilege Escalation via Sudo Abuse",
+  "alert": {
+    "target": "web-server-02",
+    "type": "Unauthorized Root Access Detected",
+    "severity": "CRITICAL"
+  },
+  "story": [
+    "CRITICAL: An unprivileged web application service account has been observed",
+    "executing commands as root via sudo.",
+    "",
+    "The account 'webuser' does not have sudo privileges in policy, yet root-level",
+    "commands have appeared in audit logs. This indicates either a misconfiguration",
+    "being exploited or a privilege escalation attack in progress.",
+    "",
+    "Identify the escalation chain and determine what actions were taken as root."
+  ],
+  "objectives": [
+    {
+      "id": "obj1",
+      "label": "Identify the escalating user account",
+      "points": 20,
+      "answer_key": "escalating_user"
+    },
+    {
+      "id": "obj2",
+      "label": "Identify the sudo binary/command used to escalate",
+      "points": 25,
+      "answer_key": "escalation_binary"
+    },
+    {
+      "id": "obj3",
+      "label": "What command was run as root?",
+      "points": 30,
+      "answer_key": "root_command"
+    },
+    {
+      "id": "obj4",
+      "label": "What was the original entry vector (how did webuser get a shell)?",
+      "points": 25,
+      "answer_key": "entry_vector"
+    }
+  ],
+  "hints": [
+    "Look for sudo events in the auth logs: 'COMMAND' entries in sudolog",
+    "The escalation binary is a legitimate system tool often found in GTFOBins",
+    "Check what happened before the sudo event — how was the shell obtained?",
+    "Search: index=hex_lab sourcetype=hex_case5_* sudo | sort _time"
+  ],
+  "splunk_queries": [
+    "index=hex_lab sourcetype=hex_case5_* | head 50",
+    "index=hex_lab sourcetype=hex_case5_* sudo | sort _time | table _time, _raw",
+    "index=hex_lab sourcetype=hex_case5_* webuser | sort _time | table _time, sourcetype, _raw"
+  ]
+}

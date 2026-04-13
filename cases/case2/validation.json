@@ -1,0 +1,11 @@
+{
+  "objectives": {
+    "compromised_user": { "type": "string", "value": "jsmith", "weight": 30 },
+    "attacker_ip": { "type": "ip", "value": "10.0.0.55", "weight": 30 },
+    "failed_before_success": { "type": "integer", "value": 5, "tolerance": 0, "weight": 20 },
+    "ip_class": { "type": "string", "value": "internal", "aliases": ["internal", "rfc1918", "private", "lan"], "weight": 20 }
+  },
+  "query_patterns": ["index=hex_lab", "Failed password", "Accepted password"],
+  "min_time_seconds": 180,
+  "anti_cheat": { "min_time": 120, "flag_if_all_correct_under": 90 }
+}

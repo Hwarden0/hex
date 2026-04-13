@@ -1,0 +1,9 @@
+{
+  "id": "case9",
+  "title": "Beaconing and C2 Detection",
+  "difficulty": "advanced",
+  "category": "Command and Control",
+  "tags": ["c2", "beaconing", "malware", "network", "periodic-communication"],
+  "estimatedTime": 50,
+  "points": 200
+}

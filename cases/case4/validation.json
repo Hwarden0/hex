@@ -1,0 +1,21 @@
+{
+  "objectives": {
+    "attacker_ip": { "type": "ip", "value": "10.0.0.200", "weight": 25 },
+    "accounts_targeted": { "type": "integer", "value": 45, "tolerance": 5, "weight": 30 },
+    "spray_password": {
+      "type": "string",
+      "value": "Winter2024!",
+      "aliases": ["winter2024!", "winter2024"],
+      "weight": 25
+    },
+    "spray_success": {
+      "type": "boolean_text",
+      "value": "no",
+      "aliases": ["no", "false", "n", "0", "negative"],
+      "weight": 20
+    }
+  },
+  "query_patterns": ["index=hex_lab", "Failed password", "stats"],
+  "min_time_seconds": 300,
+  "anti_cheat": { "min_time": 180, "flag_if_all_correct_under": 120 }
+}

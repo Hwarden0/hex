@@ -1,0 +1,6 @@
+{
+  "cron_file": ".sysupdate",
+  "cron_schedule": "*/5 * * * *",
+  "cron_command": "/tmp/.backup.sh",
+  "created_by": "www-data"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "case10",
+  "title": "Multi-Stage Attack — Full Kill Chain",
+  "difficulty": "advanced",
+  "category": "APT Simulation",
+  "tags": ["kill-chain", "apt", "multi-stage", "full-attack", "correlation"],
+  "estimatedTime": 90,
+  "points": 300
+}

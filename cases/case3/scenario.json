@@ -1,0 +1,54 @@
+{
+  "id": "case3",
+  "title": "Suspicious User Activity",
+  "alert": {
+    "target": "corp-intranet",
+    "type": "Anomalous User Behavior — Multi-Service",
+    "severity": "MEDIUM"
+  },
+  "story": [
+    "DLP system flagged unusual access patterns from an internal service account.",
+    "The account 'dbadmin' was observed accessing systems and services outside its",
+    "normal operational profile during non-business hours.",
+    "",
+    "Multiple services have logged activity from this account: SSH, MySQL, FTP.",
+    "Investigate the full scope of activity and determine if this is a compromise or",
+    "insider threat scenario."
+  ],
+  "objectives": [
+    {
+      "id": "obj1",
+      "label": "Identify the suspicious account",
+      "points": 20,
+      "answer_key": "suspicious_user"
+    },
+    {
+      "id": "obj2",
+      "label": "List all services accessed (comma-separated)",
+      "points": 30,
+      "answer_key": "services_accessed"
+    },
+    {
+      "id": "obj3",
+      "label": "Identify the time of first anomalous activity (HH:MM)",
+      "points": 25,
+      "answer_key": "first_activity_time"
+    },
+    {
+      "id": "obj4",
+      "label": "Was any data potentially exfiltrated? (yes/no)",
+      "points": 25,
+      "answer_key": "data_exfil"
+    }
+  ],
+  "hints": [
+    "Look at events from user 'dbadmin' across all sourcetypes",
+    "Use: index=hex_lab sourcetype=hex_case3_* | rex field=_raw \"user=(?<user>\\w+)|for (?<user2>\\w+) from\"",
+    "FTP transfers with large byte counts indicate potential data movement",
+    "Normal business hours for this environment: 08:00–18:00 UTC"
+  ],
+  "splunk_queries": [
+    "index=hex_lab sourcetype=hex_case3_* | head 50",
+    "index=hex_lab sourcetype=hex_case3_* dbadmin | sort _time | table _time, sourcetype, _raw"
+  ]
+}

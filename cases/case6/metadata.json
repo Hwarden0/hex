@@ -1,0 +1,9 @@
+{
+  "id": "case6",
+  "title": "Persistence via Cron Job",
+  "difficulty": "intermediate",
+  "category": "Persistence",
+  "tags": ["cron", "persistence", "linux", "backdoor", "post-exploitation"],
+  "estimatedTime": 30,
+  "points": 150
+}

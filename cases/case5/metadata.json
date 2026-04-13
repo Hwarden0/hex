@@ -1,0 +1,9 @@
+{
+  "id": "case5",
+  "title": "Privilege Escalation via Sudo Abuse",
+  "difficulty": "intermediate",
+  "category": "Privilege Escalation",
+  "tags": ["sudo", "privilege-escalation", "linux", "post-exploitation"],
+  "estimatedTime": 35,
+  "points": 150
+}

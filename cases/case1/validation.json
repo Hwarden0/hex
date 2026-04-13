@@ -1,0 +1,36 @@
+{
+  "objectives": {
+    "attacker_ip": {
+      "type": "ip",
+      "value": "10.0.0.100",
+      "weight": 30
+    },
+    "failed_count": {
+      "type": "integer",
+      "value": 247,
+      "tolerance": 5,
+      "weight": 25
+    },
+    "target_user": {
+      "type": "string",
+      "value": "root",
+      "weight": 20
+    },
+    "access_gained": {
+      "type": "boolean_text",
+      "value": "no",
+      "aliases": ["false", "n", "no", "negative", "0"],
+      "weight": 25
+    }
+  },
+  "query_patterns": [
+    "index=hex_lab",
+    "Failed password",
+    "stats count"
+  ],
+  "min_time_seconds": 120,
+  "anti_cheat": {
+    "min_time": 120,
+    "flag_if_all_correct_under": 60
+  }
+}

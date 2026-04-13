@@ -1,0 +1,6 @@
+{
+  "attacker_ip": "10.0.0.100",
+  "failed_count": 247,
+  "target_user": "root",
+  "access_gained": "no"
+}

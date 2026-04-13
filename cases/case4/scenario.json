@@ -1,0 +1,55 @@
+{
+  "id": "case4",
+  "title": "Password Spraying Attack",
+  "alert": {
+    "target": "ldap-dc01",
+    "type": "Distributed Authentication Failure Pattern",
+    "severity": "HIGH"
+  },
+  "story": [
+    "SIEM correlation rule triggered: multiple accounts experiencing authentication",
+    "failures with low per-account frequency — a classic indicator of password spraying.",
+    "",
+    "Unlike brute force attacks, password spraying attempts ONE or TWO common passwords",
+    "against MANY accounts to avoid account lockout policies.",
+    "",
+    "Investigate the authentication logs and identify the attack pattern, source, and",
+    "whether any accounts were successfully compromised."
+  ],
+  "objectives": [
+    {
+      "id": "obj1",
+      "label": "Identify the attacker IP address",
+      "points": 25,
+      "answer_key": "attacker_ip"
+    },
+    {
+      "id": "obj2",
+      "label": "Count number of distinct accounts targeted",
+      "points": 30,
+      "answer_key": "accounts_targeted"
+    },
+    {
+      "id": "obj3",
+      "label": "Identify the password used in the spray (common weak password)",
+      "points": 25,
+      "answer_key": "spray_password"
+    },
+    {
+      "id": "obj4",
+      "label": "Was any account successfully compromised? (yes/no)",
+      "points": 20,
+      "answer_key": "spray_success"
+    }
+  ],
+  "hints": [
+    "Password spraying produces low counts per user but high distinct user counts from one IP",
+    "Use: ... | stats dc(user) as unique_users, count by src_ip | where unique_users > 20",
+    "Look for the pattern: many users, 1-2 failures each, from same source",
+    "Check for any 'Accepted' events from the same attacker IP after the spray"
+  ],
+  "splunk_queries": [
+    "index=hex_lab sourcetype=hex_case4_* | head 50",
+    "index=hex_lab sourcetype=hex_case4_* \"Failed password\" | rex field=_raw \"for (?<user>\\w+) from (?<src_ip>[\\d.]+)\" | stats dc(user) as targets, count by src_ip | sort -targets"
+  ]
+}

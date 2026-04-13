@@ -1,0 +1,9 @@
+{
+  "id": "case4",
+  "title": "Password Spraying Attack",
+  "difficulty": "intermediate",
+  "category": "Authentication",
+  "tags": ["password-spraying", "active-directory", "authentication", "enumeration"],
+  "estimatedTime": 35,
+  "points": 150
+}

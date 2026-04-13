@@ -1,0 +1,36 @@
+{
+  "objectives": {
+    "initial_vector": {
+      "type": "string",
+      "value": "sql injection",
+      "aliases": ["sql injection", "sqli", "sql-injection", "web exploit", "web application"],
+      "weight": 20
+    },
+    "vulnerability_class": {
+      "type": "string",
+      "value": "sqli",
+      "aliases": ["sqli", "sql injection", "owasp a03", "injection"],
+      "weight": 20
+    },
+    "persistence_mechanism": {
+      "type": "string",
+      "value": "webshell",
+      "aliases": ["webshell", "web shell", "php shell", "reverse shell"],
+      "weight": 20
+    },
+    "attack_stages": {
+      "type": "set_partial",
+      "value": ["initial-access", "execution", "persistence", "privilege-escalation", "lateral-movement", "exfiltration"],
+      "min_match": 4,
+      "weight": 20
+    },
+    "exfil_destination": {
+      "type": "ip",
+      "value": "185.220.101.55",
+      "weight": 20
+    }
+  },
+  "query_patterns": ["index=hex_lab", "sourcetype", "sort _time"],
+  "min_time_seconds": 900,
+  "anti_cheat": { "min_time": 600, "flag_if_all_correct_under": 300 }
+}

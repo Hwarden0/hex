@@ -1,0 +1,6 @@
+bin/hex
+bin/hex.exe
+node_modules/
+dist/
+*.log
+.qwen

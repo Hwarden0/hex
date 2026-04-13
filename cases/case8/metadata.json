@@ -1,0 +1,9 @@
+{
+  "id": "case8",
+  "title": "Lateral Movement Across Hosts",
+  "difficulty": "advanced",
+  "category": "Lateral Movement",
+  "tags": ["lateral-movement", "pivoting", "ssh", "service-account", "multi-host"],
+  "estimatedTime": 50,
+  "points": 200
+}

@@ -1,0 +1,26 @@
+{
+  "objectives": {
+    "escalating_user": { "type": "string", "value": "webuser", "weight": 20 },
+    "escalation_binary": {
+      "type": "string",
+      "value": "vim",
+      "aliases": ["vim", "/usr/bin/vim", "/bin/vim"],
+      "weight": 25
+    },
+    "root_command": {
+      "type": "string",
+      "value": "/bin/bash",
+      "aliases": ["/bin/bash", "bash", "/bin/sh", "sh"],
+      "weight": 30
+    },
+    "entry_vector": {
+      "type": "string",
+      "value": "ssh",
+      "aliases": ["ssh", "sshd", "secure shell"],
+      "weight": 25
+    }
+  },
+  "query_patterns": ["index=hex_lab", "sudo", "webuser"],
+  "min_time_seconds": 300,
+  "anti_cheat": { "min_time": 180, "flag_if_all_correct_under": 120 }
+}

@@ -1,0 +1,53 @@
+{
+  "id": "case2",
+  "title": "Failed vs Successful Login Correlation",
+  "alert": {
+    "target": "auth-server-01",
+    "type": "Account Compromise Indicator",
+    "severity": "HIGH"
+  },
+  "story": [
+    "SOC received an anomaly alert: a user account has exhibited unusual login patterns.",
+    "Multiple failed authentication attempts were followed by a successful login from",
+    "an IP address with no prior access history.",
+    "",
+    "This pattern is consistent with credential stuffing or a targeted attack.",
+    "Your task: identify the compromised account and the attacker's IP."
+  ],
+  "objectives": [
+    {
+      "id": "obj1",
+      "label": "Identify the compromised user account",
+      "points": 30,
+      "answer_key": "compromised_user"
+    },
+    {
+      "id": "obj2",
+      "label": "Identify the attacker IP that succeeded",
+      "points": 30,
+      "answer_key": "attacker_ip"
+    },
+    {
+      "id": "obj3",
+      "label": "Count failed attempts before successful login",
+      "points": 20,
+      "answer_key": "failed_before_success"
+    },
+    {
+      "id": "obj4",
+      "label": "Identify the source country/ASN context (IP class)",
+      "points": 20,
+      "answer_key": "ip_class"
+    }
+  ],
+  "hints": [
+    "Correlate 'Failed password' events with 'Accepted password' events per user",
+    "Look for IPs that appear in both failed AND successful login events for the same user",
+    "index=hex_lab sourcetype=hex_case2_* | rex field=_raw \"for (?<user>\\w+) from (?<src_ip>[\\d.]+)\"",
+    "The compromised account has exactly 5 failed attempts before success from the same IP"
+  ],
+  "splunk_queries": [
+    "index=hex_lab sourcetype=hex_case2_* | head 50",
+    "index=hex_lab sourcetype=hex_case2_* | rex field=_raw \"(?<action>Failed password|Accepted password) for (?<user>\\w+) from (?<src_ip>[\\d.]+)\" | stats count by user, src_ip, action | sort user, src_ip"
+  ]
+}

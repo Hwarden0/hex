@@ -1,0 +1,9 @@
+{
+  "id": "case3",
+  "title": "Suspicious User Activity",
+  "difficulty": "beginner",
+  "category": "Insider Threat",
+  "tags": ["user-behavior", "multi-service", "anomaly", "insider-threat"],
+  "estimatedTime": 30,
+  "points": 100
+}
