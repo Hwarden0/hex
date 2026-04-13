@@ -38,6 +38,7 @@ You need Node.js once to build the binary. After that, `hex` runs standalone -- 
 | `hex doctor` | Run system diagnostics to verify configuration |
 | `hex start <case_id>` | Start an investigation case |
 | `hex status [case_id]` | Check objective progress or show all cases overview |
+| `hex answer [caseId] [key] [value]` | Record your findings for an objective (interactive if no args given) |
 | `hex submit` | Submit investigation findings for scoring |
 | `hex hint` | Get a hint for the current case (-5 points per hint) |
 | `hex score` | View your scores and overall level |
