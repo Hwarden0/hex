@@ -14,6 +14,7 @@ const submissionsDir = ()      => SUBMISSIONS_DIR;
 const configPath    = ()       => path.join(HEX_DIR, 'config.json');
 const userPath      = ()       => path.join(HEX_DIR, 'user.json');
 const scoresPath    = ()       => path.join(HEX_DIR, 'scores.json');
+const githubTokenPath = ()     => path.join(HEX_DIR, 'github-token.json');
 const sessionPath   = (caseId) => path.join(SESSIONS_DIR, `${caseId}.json`);
 const submissionPath = (user, caseId) => path.join(SUBMISSIONS_DIR, user, `${caseId}.json`);
 const casesDir      = ()       => assetPath('cases');
@@ -26,6 +27,7 @@ module.exports = {
   configPath,
   userPath,
   scoresPath,
+  githubTokenPath,
   sessionPath,
   submissionPath,
   casesDir,

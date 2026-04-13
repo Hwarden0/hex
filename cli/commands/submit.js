@@ -12,7 +12,6 @@ const calc     = require('../../scoring/calculator');
 const antiCheat = require('../../submission/anticheat');
 const gen      = require('../../submission/generator');
 const github   = require('../../submission/github');
-const store    = require('../../storage/store');
 const { formatDuration } = require('../../utils/time');
 
 async function run() {
@@ -22,7 +21,7 @@ async function run() {
     return;
   }
 
-  const user = store.getUser();
+  const user = require('../../storage/store').getUser();
   if (!user || !user.name) {
     display.error('No HEX user configured.', 'Run: hex init to set up your profile.');
     return;
@@ -69,7 +68,7 @@ async function run() {
     return;
   }
 
-  // Show progress summary
+  // ── Show submission preview ────────────────────────────────────────────────
   console.log();
   display.infoBox('Submission Preview', [
     `Case      : ${caseObj.title}`,
@@ -83,7 +82,7 @@ async function run() {
   const { confirm } = await inquirer.prompt([{
     type:    'confirm',
     name:    'confirm',
-    message: 'Submit these findings?',
+    message: 'Submit these findings for scoring?',
     default: false,
   }]);
 
@@ -92,14 +91,14 @@ async function run() {
     return;
   }
 
-  // Calculate score
+  // ── Calculate score ────────────────────────────────────────────────────────
   const validation = caseObj.validation;
   const scoring = calc.calculate({
     answers:        s.answers,
     validation,
     elapsedSeconds: elapsed,
     hintsUsed:      s.hintsUsed,
-    estimatedTime:  caseObj.metadata?.estimated_time || 30,
+    estimatedTime:  caseObj.metadata?.estimatedTime || 30,
   });
 
   // Anti-cheat check
@@ -114,10 +113,10 @@ async function run() {
 
   const antiCheatResult = antiCheat.validate(submissionPreview, s, validation);
 
-  // Mark session complete
+  // ── Mark session complete ──────────────────────────────────────────────────
   session.complete(caseId, s.answers);
 
-  // Generate and save submission
+  // ── ALWAYS save locally first — this is the source of truth ────────────────
   const flags = antiCheatResult.flags || [];
   const submission = gen.generate({
     user:         user.name,
@@ -131,7 +130,7 @@ async function run() {
 
   gen.save(user.name, caseId, submission);
 
-  // Show results
+  // ── Show results ───────────────────────────────────────────────────────────
   console.log();
   display.separator();
   console.log(chalk.bold.cyan('  SUBMISSION RESULTS'));
@@ -142,7 +141,7 @@ async function run() {
   console.log(`  ${chalk.gray('Level    :')} ${chalk.white(scoring.level)}`);
   console.log(`  ${chalk.gray('Time     :')} ${chalk.white(formatDuration(elapsed))}`);
   console.log(`  ${chalk.gray('Time mod :')} ${chalk.white(scoring.timeFactor >= 1 ? '+' : '')}${chalk.white(Math.round((scoring.timeFactor - 1) * 100))}%`);
-  console.log(`  ${chalk.gray('Hints    :')} ${chalk.white(submission.hints ? `-${submission.hints}` : '0')} point deduction`);
+  console.log(`  ${chalk.gray('Hints    :')} ${chalk.white(s.hintsUsed.length > 0 ? `-${s.hintsUsed.length * 5} points` : 'none')}`);
 
   if (antiCheatResult.flags && antiCheatResult.flags.length > 0) {
     console.log();
@@ -151,48 +150,59 @@ async function run() {
   }
 
   console.log();
+  display.success(`Case ${caseId} submitted locally with score ${scoring.finalScore}/100`);
+  console.log(chalk.gray(`  File saved to: ~/.hex/submissions/${user.name}/${caseId}.json`));
 
-  // GitHub submission
-  if (github.gitAvailable()) {
-    const { pushToGitHub } = await inquirer.prompt([{
-      type:    'confirm',
-      name:    'pushToGitHub',
-      message: 'Push this submission to GitHub for leaderboard ranking?',
-      default: !!user.githubUser,
-    }]);
+  // ── Optional: Submit to public leaderboard ─────────────────────────────────
+  console.log();
 
-    if (pushToGitHub) {
-      const spinner = ora({ text: 'Creating submission branch...', color: 'cyan' }).start();
-      try {
-        const branchInfo = await github.createSubmissionBranch(user.name, caseId, submission);
-        spinner.text = 'Pushing to remote...';
-        const prInfo = await github.pushAndPR(user.name, caseId);
-        spinner.succeed('Submission branch created.');
+  const cachedUser = github.getCachedGitHubUser();
+  const authNote = cachedUser
+    ? chalk.gray(`  (Currently authenticated as @${cachedUser})`)
+    : chalk.gray('  (Will use GitHub Device Authorization Flow)');
+  console.log(authNote);
 
-        if (prInfo.pushed) {
-          console.log();
-          display.infoBox('Next Steps', [
-            'Open a Pull Request at:',
-            `  ${prInfo.prUrl}`,
-            '',
-            'Your score will appear on the leaderboard once the PR is merged.',
-          ]);
-        } else {
-          const instructions = github.prInstructions(user.name, caseId, branchInfo.filePath);
-          display.infoBox('Manual PR Instructions', instructions);
-        }
-      } catch (err) {
-        spinner.fail(`GitHub integration failed: ${err.message}`);
-        console.log(chalk.gray('  Your submission has been saved locally.\n'));
-      }
-    } else {
-      console.log(chalk.gray('  Submission saved locally. Run hex submit later to push to GitHub.\n'));
-    }
-  } else {
-    console.log(chalk.yellow('  Git is not installed. Install Git and re-run hex submit to enable leaderboard.\n'));
+  const { pushToGitHub } = await inquirer.prompt([{
+    type:    'confirm',
+    name:    'pushToGitHub',
+    message: 'Submit to the public leaderboard via GitHub?',
+    default: !!cachedUser,
+  }]);
+
+  if (!pushToGitHub) {
+    console.log();
+    console.log(chalk.gray('  Leaderboard submission skipped.'));
+    console.log(chalk.gray('  Your results are saved locally.\n'));
+    console.log(chalk.gray('  Run ') + chalk.cyan('hex submit') + chalk.gray(' again later to publish your score.\n'));
+    return;
   }
 
-  display.success(`Case ${caseId} submitted with score ${scoring.finalScore}`);
+  // ── GitHub submission flow ─────────────────────────────────────────────────
+  const spinner = ora({ text: 'Authenticating with GitHub...', color: 'cyan' }).start();
+
+  try {
+    const result = await github.submitToLeaderboard(submission);
+
+    if (result.success) {
+      spinner.succeed('Leaderboard submission complete!');
+      console.log();
+      display.infoBox('Pull Request Created', [
+        `  PR: ${result.prUrl}`,
+        '',
+        `  Your score will appear on the leaderboard once the PR is merged.`,
+      ]);
+    } else {
+      spinner.fail(`Leaderboard submission failed: ${result.error}`);
+      console.log();
+      console.log(chalk.yellow('  Your submission was saved locally but could not be published.'));
+      console.log(github.prInstructions(user.name, caseId));
+      console.log(chalk.gray('  You can retry later with: hex submit\n'));
+    }
+  } catch (err) {
+    spinner.fail(`GitHub error: ${err.message}`);
+    console.log();
+    console.log(chalk.gray('  Your submission has been saved locally.\n'));
+  }
 }
 
 module.exports = { run };
