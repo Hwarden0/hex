@@ -1,4 +1,4 @@
-# HEX - SOC Simulation Platform
+# HEX 
 
 Splunk-native SOC simulation platform that runs locally and trains users to think like real SOC analysts through realistic investigation scenarios.
 
@@ -28,7 +28,7 @@ You need Node.js once to build the binary. After that, `hex` runs standalone -- 
 
 - **Splunk Enterprise** (free license available at https://www.splunk.com/en_us/download.html)
 - **Git** (optional, for leaderboard submissions)
-- **Node.js 16+** (only if using npm install or running from source)
+- **Node.js 16+** 
 
 ## CLI Commands
 
