@@ -1,6 +1,6 @@
-# HEX 
+# HEX
 
-Splunk-native SOC simulation platform that runs locally and trains users to think like real SOC analysts through realistic investigation scenarios.
+Hunt threats with Splunk. Right from your terminal.
 
 ## Overview
 

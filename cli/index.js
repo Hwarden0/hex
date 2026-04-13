@@ -7,7 +7,7 @@ const program = new Command();
 
 program
   .name('hex')
-  .description('Splunk-native SOC simulation platform for security analyst training')
+  .description('Hunt threats with Splunk. Right from your terminal.')
   .version(packageJson.version);
 
 program
