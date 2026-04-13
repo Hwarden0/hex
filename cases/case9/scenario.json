@@ -18,39 +18,20 @@
     "and determine the precise beacon interval."
   ],
   "objectives": [
-    {
-      "id": "obj1",
-      "label": "Identify the infected internal host",
-      "points": 20,
-      "answer_key": "infected_host"
-    },
-    {
-      "id": "obj2",
-      "label": "Identify the C2 server IP address",
-      "points": 25,
-      "answer_key": "c2_ip"
-    },
-    {
-      "id": "obj3",
-      "label": "What is the beacon interval in seconds?",
-      "points": 30,
-      "answer_key": "beacon_interval"
-    },
-    {
-      "id": "obj4",
-      "label": "What port does the C2 communicate on?",
-      "points": 25,
-      "answer_key": "c2_port"
-    }
+    { "id": "obj1", "label": "Identify the infected internal host", "points": 20, "answer_key": "infected_host" },
+    { "id": "obj2", "label": "Identify the C2 server IP address", "points": 25, "answer_key": "c2_ip" },
+    { "id": "obj3", "label": "What is the beacon interval in seconds?", "points": 30, "answer_key": "beacon_interval" },
+    { "id": "obj4", "label": "What port does the C2 communicate on?", "points": 25, "answer_key": "c2_port" }
   ],
   "hints": [
-    "Beaconing detection: look for the same src/dst pair with very consistent time deltas",
-    "Use: ... | sort _time | streamstats window=2 last(_time) as prev | eval delta=_time-prev | stats stdev(delta) by dst",
-    "Low standard deviation of time deltas = beaconing behavior",
-    "The beacon interval is exactly 60 seconds with very low jitter"
+    "Start with: index=hex_lab sourcetype=hex_case9_firewall | head 50",
+    "Look for periodic connections: index=hex_lab sourcetype=hex_case9_firewall | stats count by src_ip, dest_ip | sort -count",
+    "Beaconing detection: same src/dst pair with very consistent time deltas",
+    "Use timechart: ... | timechart count by dest_ip span=1m — look for regular spikes"
   ],
   "splunk_queries": [
-    "index=hex_lab sourcetype=hex_case9_* | head 50",
-    "index=hex_lab sourcetype=hex_case9_* | rex field=_raw \"SRC=(?<src>[\\d.]+).*DST=(?<dst>[\\d.]+).*DPT=(?<dpt>\\d+)\" | where NOT match(dst, \"^10\\.\") | stats count, dc(src) by dst, dpt | sort -count"
+    "index=hex_lab sourcetype=hex_case9_firewall | stats count by src_ip, dest_ip, dest_port | sort -count",
+    "index=hex_lab sourcetype=hex_case9_firewall src_ip=10.0.1.50 | timechart count by dest_ip span=5m",
+    "index=hex_lab sourcetype=hex_case9_suricata | table _time src_ip dest_ip signature"
   ]
 }

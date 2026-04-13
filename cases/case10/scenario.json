@@ -1,69 +1,37 @@
 {
   "id": "case10",
-  "title": "Multi-Stage Attack — Full Kill Chain",
+  "title": "Multi-Stage Attack (Full Kill Chain)",
   "alert": {
-    "target": "enterprise-network",
-    "type": "APT Campaign Detected — Multiple IOCs",
+    "target": "web-app-01",
+    "type": "Multiple Security Events Detected",
     "severity": "CRITICAL"
   },
   "story": [
-    "CRITICAL: Threat intelligence correlation has linked multiple low-severity",
-    "alerts from the past 6 hours into a single coordinated attack campaign.",
+    "Multiple security alerts have fired across several systems over a 2-hour period.",
+    "The web application team reported unusual database query patterns.",
+    "The database team noticed high load during off-hours.",
+    "Network monitoring detected large outbound transfers to an external IP.",
     "",
-    "Indicators span: web application logs, authentication logs, network firewall,",
-    "system audit trails, and endpoint detection events.",
-    "",
-    "You are looking at a full intrusion lifecycle:",
-    "  Stage 1: Initial Access (web exploit)",
-    "  Stage 2: Execution + Persistence",
-    "  Stage 3: Privilege Escalation",
-    "  Stage 4: Lateral Movement",
-    "  Stage 5: Exfiltration",
-    "",
-    "Reconstruct the full attack chain. This is your hardest case.",
-    "Take your time. Correlate across all log sources."
+    "This appears to be a coordinated multi-stage attack. Reconstruct the full",
+    "kill chain from initial access through exfiltration."
   ],
   "objectives": [
-    {
-      "id": "obj1",
-      "label": "Identify the initial attack vector (how access was first gained)",
-      "points": 20,
-      "answer_key": "initial_vector"
-    },
-    {
-      "id": "obj2",
-      "label": "What CVE or vulnerability class was exploited for initial access?",
-      "points": 20,
-      "answer_key": "vulnerability_class"
-    },
-    {
-      "id": "obj3",
-      "label": "What persistence mechanism was established?",
-      "points": 20,
-      "answer_key": "persistence_mechanism"
-    },
-    {
-      "id": "obj4",
-      "label": "List attack stages detected (comma-separated)",
-      "points": 20,
-      "answer_key": "attack_stages"
-    },
-    {
-      "id": "obj5",
-      "label": "What was the final exfiltration destination IP?",
-      "points": 20,
-      "answer_key": "exfil_destination"
-    }
+    { "id": "obj1", "label": "What was the initial attack vector?", "points": 20, "answer_key": "initial_vector" },
+    { "id": "obj2", "label": "What vulnerability class was exploited?", "points": 20, "answer_key": "vulnerability_class" },
+    { "id": "obj3", "label": "What persistence mechanism was installed?", "points": 20, "answer_key": "persistence_mechanism" },
+    { "id": "obj4", "label": "List the attack stages (comma-separated)", "points": 20, "answer_key": "attack_stages" },
+    { "id": "obj5", "label": "What IP was data exfiltrated to?", "points": 20, "answer_key": "exfil_destination" }
   ],
   "hints": [
-    "Start with the web/apache logs — initial access came through a web application",
-    "After web access, look at auth logs and audit logs for what happened next",
-    "The attack occurred within a 6-hour window starting around 22:00",
-    "Trace the attacker's IP through each stage: initial → pivot → exfil"
+    "Start with: index=hex_lab sourcetype=hex_case10_* | head 20",
+    "Web attacks: index=hex_lab sourcetype=hex_case10_stream_http | stats count by uri | sort -count",
+    "Database: index=hex_lab sourcetype=hex_case10_mysql | table _time query",
+    "Network: index=hex_lab sourcetype=hex_case10_firewall | stats sum(bytes) by dest_ip | sort -sum",
+    "IDS alerts: index=hex_lab sourcetype=hex_case10_suricata | table signature src_ip dest_ip"
   ],
   "splunk_queries": [
-    "index=hex_lab sourcetype=hex_case10_* | head 50",
-    "index=hex_lab sourcetype=hex_case10_* 185.220.101.55 | sort _time | table _time, sourcetype, _raw",
-    "index=hex_lab sourcetype=hex_case10_* | sort _time | table _time, sourcetype, host, _raw | head 200"
+    "index=hex_lab sourcetype=hex_case10_stream_http | stats count by uri | sort -count",
+    "index=hex_lab sourcetype=hex_case10_suricata | table _time src_ip dest_ip signature",
+    "index=hex_lab sourcetype=hex_case10_firewall | stats sum(bytes) by src_ip, dest_ip | sort -sum(bytes)"
   ]
 }

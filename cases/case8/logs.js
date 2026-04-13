@@ -1,83 +1,221 @@
 'use strict';
 
-const { syslogTs, ago, addSeconds } = require('../../utils/time');
+// Case 8: Lateral Movement via SSH Key Hopping
+// ~5,000 events. svc_account hops: attacker → web → db → admin.
+// Answers discoverable via: stats dc(host) by user | sort -dc
+// Sourcetypes: auth, sysmon, sudo
 
-// Case 8: Lateral Movement
-// svc_account hops: attacker -> web-server-01 -> db-server-01 -> admin-server-01
-// Each hop comes from the IP of the previous host
+const { syslogTs, ago, addSeconds } = require('../../utils/time');
+const {
+  randInt, pick, LEGIT_INTERNAL, COMMON_USERS, SERVICE_USERS, ADMIN_USERS,
+  kv, auth, sysmon, cron, authBackground, SURICATA_SIGS,
+} = require('../../utils/logfmt');
 
 function generate() {
   const base = new Date();
   base.setHours(20, 5, 0, 0);
 
-  const ATTACKER_IP  = '10.0.0.42';
-  const WEB_IP       = '10.0.0.80';
-  const DB_IP        = '10.0.0.81';
-  const ADMIN_IP     = '10.0.0.82';
+  const ATTACKER_IP = '10.0.0.42';
+  const WEB_IP      = '10.0.0.80';
+  const DB_IP       = '10.0.0.81';
+  const ADMIN_IP    = '10.0.0.82';
 
   const WEB_HOST   = 'web-server-01';
   const DB_HOST    = 'db-server-01';
   const ADMIN_HOST = 'admin-server-01';
 
-  const webEvents   = [];
-  const dbEvents    = [];
-  const adminEvents = [];
+  const USER = 'svc_account';
 
-  const LEGIT_USERS = ['appuser', 'deploy', 'monitor', 'backup'];
+  // ── Auth events (all hosts combined) ─────────────────────────────────────
+  const authEvents = [];
 
-  // ── Initial compromise: attacker logs into web-server-01 as svc_account ──────
-  let t = new Date(base);
-  webEvents.push(`${syslogTs(t)} ${WEB_HOST} sshd[10100]: Accepted publickey for svc_account from ${ATTACKER_IP} port 55500 ssh2`);
-  t = addSeconds(t, 2);
-  webEvents.push(`${syslogTs(t)} ${WEB_HOST} sshd[10100]: pam_unix(sshd:session): session opened for user svc_account by (uid=2001)`);
+  // Background: 8 hours of normal auth across all hosts (~3,000 events)
+  const bgStart = ago(base, { hours: 8 });
+  authEvents.push(...authBackground({
+    start: bgStart, end: addSeconds(base, 7200), count: 3000,
+    destIp: pick([WEB_IP, DB_IP, ADMIN_IP]),
+    users: [...COMMON_USERS.slice(0, 10), ...SERVICE_USERS],
+  }));
 
-  // Some commands run on web
-  t = addSeconds(t, 15);
-  webEvents.push(`${syslogTs(t)} ${WEB_HOST} sudo[10150]: svc_account : NOPASSWD command: /usr/bin/ssh`);
+  // ── HOP 1: attacker → web-server-01 at 20:05 ────────────────────────────
+  const webPid = randInt(10000, 65000);
+  authEvents.push(auth(base, {
+    src_ip: ATTACKER_IP,
+    dest_ip: WEB_IP,
+    user: USER,
+    action: 'login_success',
+    status: 'success',
+    service: 'sshd',
+    auth_method: 'publickey',
+    session_id: `sess_${webPid}`,
+  }));
 
-  // ── Pivot 1: web-server-01 → db-server-01 ────────────────────────────────────
-  t = addSeconds(base, 120);
-  dbEvents.push(`${syslogTs(t)} ${DB_HOST} sshd[11200]: Accepted publickey for svc_account from ${WEB_IP} port 43210 ssh2`);
-  t = addSeconds(t, 2);
-  dbEvents.push(`${syslogTs(t)} ${DB_HOST} sshd[11200]: pam_unix(sshd:session): session opened for user svc_account by (uid=2001)`);
+  authEvents.push(auth(addSeconds(base, 18), {
+    src_ip: '127.0.0.1',
+    dest_ip: WEB_IP,
+    user: USER,
+    action: 'login_success',
+    status: 'success',
+    service: 'sudo',
+    auth_method: 'sudo',
+  }));
 
-  t = addSeconds(t, 30);
-  dbEvents.push(`${syslogTs(t)} ${DB_HOST} sudo[11250]: svc_account : NOPASSWD command: /bin/cat /etc/shadow`);
-  t = addSeconds(t, 5);
-  dbEvents.push(`${syslogTs(t)} ${DB_HOST} sudo[11251]: svc_account : NOPASSWD command: /usr/bin/ssh ${ADMIN_IP}`);
+  // ── HOP 2: web-server-01 → db-server-01 at 20:07 ────────────────────────
+  const dbPid = randInt(10000, 65000);
+  authEvents.push(auth(addSeconds(base, 120), {
+    src_ip: WEB_IP,
+    dest_ip: DB_IP,
+    user: USER,
+    action: 'login_success',
+    status: 'success',
+    service: 'sshd',
+    auth_method: 'publickey',
+    session_id: `sess_${dbPid}`,
+  }));
 
-  // ── Pivot 2: db-server-01 → admin-server-01 ──────────────────────────────────
-  t = addSeconds(base, 480);
-  adminEvents.push(`${syslogTs(t)} ${ADMIN_HOST} sshd[12300]: Accepted publickey for svc_account from ${DB_IP} port 60123 ssh2`);
-  t = addSeconds(t, 2);
-  adminEvents.push(`${syslogTs(t)} ${ADMIN_HOST} sshd[12300]: pam_unix(sshd:session): session opened for user svc_account by (uid=2001)`);
+  authEvents.push(auth(addSeconds(base, 145), {
+    src_ip: '127.0.0.1',
+    dest_ip: DB_IP,
+    user: USER,
+    action: 'login_success',
+    status: 'success',
+    service: 'sudo',
+    auth_method: 'sudo',
+  }));
 
-  t = addSeconds(t, 20);
-  adminEvents.push(`${syslogTs(t)} ${ADMIN_HOST} sudo[12350]: svc_account : TTY=pts/0 ; PWD=/home/svc_account ; USER=root ; COMMAND=/bin/bash`);
-  t = addSeconds(t, 5);
-  adminEvents.push(`${syslogTs(t)} ${ADMIN_HOST} useradd[12400]: new user: name=svc_backup, UID=0, GID=0, home=/root, shell=/bin/bash`);
+  // ── HOP 3: db-server-01 → admin-server-01 at 20:13 ──────────────────────
+  const adminPid = randInt(10000, 65000);
+  authEvents.push(auth(addSeconds(base, 480), {
+    src_ip: DB_IP,
+    dest_ip: ADMIN_IP,
+    user: USER,
+    action: 'login_success',
+    status: 'success',
+    service: 'sshd',
+    auth_method: 'publickey',
+    session_id: `sess_${adminPid}`,
+  }));
 
-  // ── Legitimate background traffic on each host ────────────────────────────────
-  const allHosts = [
-    { host: WEB_HOST,   events: webEvents },
-    { host: DB_HOST,    events: dbEvents },
-    { host: ADMIN_HOST, events: adminEvents },
+  // Backdoor created on admin server
+  authEvents.push(auth(addSeconds(base, 495), {
+    src_ip: '127.0.0.1',
+    dest_ip: ADMIN_IP,
+    user: 'svc_backup',
+    action: 'account_created',
+    status: 'success',
+    service: 'useradd',
+  }));
+
+  // Session closures
+  authEvents.push(auth(addSeconds(base, 900), {
+    src_ip: ATTACKER_IP,
+    dest_ip: WEB_IP,
+    user: USER,
+    action: 'logout',
+    status: 'success',
+    service: 'sshd',
+  }));
+
+  // ── Sysmon events ───────────────────────────────────────────────────────
+  const sysmonEvents = [];
+
+  // Background Sysmon (~800 events)
+  const bgProcesses = [
+    'C:\\Windows\\System32\\svchost.exe',
+    'C:\\Windows\\System32\\lsass.exe',
+    'C:\\Windows\\System32\\csrss.exe',
+    'C:\\Program Files\\Chrome\\chrome.exe',
+    'C:\\Windows\\System32\\explorer.exe',
   ];
-  for (const { host, events } of allHosts) {
-    let bgT = ago(base, { hours: 4 });
-    while (bgT < new Date(base).setHours(23, 59, 59, 999)) {
-      const u = LEGIT_USERS[Math.floor(Math.random() * LEGIT_USERS.length)];
-      const ip = `10.0.0.${10 + Math.floor(Math.random() * 20)}`;
-      events.push(`${syslogTs(bgT)} ${host} sshd[${8000 + Math.floor(Math.random() * 1000)}]: Accepted password for ${u} from ${ip} port ${49000 + Math.floor(Math.random() * 5000)} ssh2`);
-      bgT = addSeconds(bgT, 300 + Math.floor(Math.random() * 600));
-    }
-    events.sort();
+  let smT = ago(base, { hours: 8 });
+  while (smT < addSeconds(base, 7200)) {
+    sysmonEvents.push(sysmon(smT, {
+      event_id: 1,
+      process: pick(bgProcesses),
+      user: pick([...COMMON_USERS.slice(0, 8), 'SYSTEM']),
+      parent_process: 'C:\\Windows\\System32\\services.exe',
+    }));
+    smT = addSeconds(smT, randInt(30, 120));
   }
 
+  // THE SIGNAL: lateral movement process traces
+  sysmonEvents.push(sysmon(addSeconds(base, 20), {
+    event_id: 1,
+    process: 'C:\\Windows\\System32\\ssh.exe',
+    user: USER,
+    parent_process: 'C:\\Windows\\System32\\cmd.exe',
+    command_line: `ssh -i /home/${USER}/.ssh/id_rsa ${USER}@${DB_IP}`,
+    dest_ip: DB_IP,
+    dest_port: 22,
+  }));
+  sysmonEvents.push(sysmon(addSeconds(base, 130), {
+    event_id: 1,
+    process: 'C:\\Windows\\System32\\ssh.exe',
+    user: USER,
+    parent_process: 'C:\\Windows\\System32\\cmd.exe',
+    command_line: `ssh ${USER}@${ADMIN_IP}`,
+    dest_ip: ADMIN_IP,
+    dest_port: 22,
+  }));
+
+  // ── Sudo events ──────────────────────────────────────────────────────────
+  const sudoEvents = [];
+
+  // Background sudo (~200 events)
+  const legitSudoCmds = [
+    '/usr/bin/systemctl restart nginx',
+    '/usr/bin/systemctl status apache2',
+    '/usr/sbin/logrotate /etc/logrotate.conf',
+    '/usr/bin/apt-get update',
+    '/usr/bin/tail -100 /var/log/syslog',
+  ];
+  let sudoT = ago(base, { hours: 8 });
+  while (sudoT < addSeconds(base, 7200)) {
+    if (Math.random() < 0.1) {
+      sudoEvents.push(cron(sudoT, {
+        user: pick([...COMMON_USERS.slice(0, 10), ...SERVICE_USERS]),
+        command: pick(legitSudoCmds),
+        status: 'success',
+      }));
+    }
+    sudoT = addSeconds(sudoT, randInt(120, 600));
+  }
+
+  // THE SIGNAL: sudo commands during lateral movement
+  sudoEvents.push(cron(addSeconds(base, 18), {
+    user: USER,
+    command: 'cat /etc/hosts',
+    status: 'success',
+  }));
+  sudoEvents.push(cron(addSeconds(base, 23), {
+    user: USER,
+    command: `ssh -i /home/${USER}/.ssh/id_rsa ${USER}@${DB_IP}`,
+    status: 'success',
+  }));
+  sudoEvents.push(cron(addSeconds(base, 145), {
+    user: USER,
+    command: 'cat /etc/shadow',
+    status: 'success',
+  }));
+  sudoEvents.push(cron(addSeconds(base, 153), {
+    user: USER,
+    command: `ssh ${USER}@${ADMIN_IP}`,
+    status: 'success',
+  }));
+  sudoEvents.push(cron(addSeconds(base, 490), {
+    user: USER,
+    command: '/bin/bash',
+    status: 'success',
+  }));
+
+  authEvents.sort();
+  sysmonEvents.sort();
+  sudoEvents.sort();
+
   return [
-    { events: webEvents,   sourcetype: 'auth', host: WEB_HOST },
-    { events: dbEvents,    sourcetype: 'auth', host: DB_HOST },
-    { events: adminEvents, sourcetype: 'auth', host: ADMIN_HOST },
+    { events: authEvents, sourcetype: 'auth', host: WEB_HOST },
+    { events: sysmonEvents, sourcetype: 'sysmon', host: WEB_HOST },
+    { events: sudoEvents, sourcetype: 'sudo', host: WEB_HOST },
   ];
 }
 

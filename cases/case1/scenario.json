@@ -9,7 +9,7 @@
   "story": [
     "SIEM alert triggered at 14:23 UTC.",
     "An unusually high volume of SSH authentication failures has been detected against prod-server-01.",
-    "The failures began suddenly and are generating ~30 events per minute.",
+    "The failures began suddenly and are generating a significant spike in auth events.",
     "Initial triage indicates a single external source is responsible.",
     "",
     "Your task: investigate the incident and determine the scope of the attack."
@@ -41,14 +41,14 @@
     }
   ],
   "hints": [
-    "Start with: index=hex_lab sourcetype=hex_case1_* | head 20",
-    "Use stats count by src_ip or extract IPs from the raw log field",
-    "Look for 'Failed password' vs 'Accepted password' in the events",
+    "Start with: index=hex_lab sourcetype=hex_case1_auth | head 20",
+    "Use: index=hex_lab sourcetype=hex_case1_auth action=login_failure | stats count by src_ip | sort -count",
+    "Check for suricata alerts: index=hex_lab sourcetype=hex_case1_suricata | table src_ip signature",
     "The attacker made a very large number of attempts — filter by event count threshold"
   ],
   "splunk_queries": [
     "index=hex_lab sourcetype=hex_case1_* | head 50",
-    "index=hex_lab sourcetype=hex_case1_* \"Failed password\" | rex field=_raw \"from (?<src_ip>\\d+\\.\\d+\\.\\d+\\.\\d+)\" | stats count by src_ip | sort -count",
-    "index=hex_lab sourcetype=hex_case1_* \"Accepted password\" | rex field=_raw \"from (?<src_ip>\\d+\\.\\d+\\.\\d+\\.\\d+)\""
+    "index=hex_lab sourcetype=hex_case1_auth action=login_failure | stats count by src_ip | sort -count",
+    "index=hex_lab sourcetype=hex_case1_auth action=login_success | stats count by src_ip"
   ]
 }

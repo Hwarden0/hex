@@ -1,77 +1,156 @@
 'use strict';
 
-const { syslogTs, ago, addSeconds } = require('../../utils/time');
+// Case 9: C2 Beaconing Detection
+// ~10,000 events. workstation-05 (10.0.1.50) beacons to C2 every ~60s with ±2s jitter.
+// Answers discoverable via: timechart count by dest_ip span=1m → regular 60s spikes
+// Sourcetypes: firewall, stream_http, suricata
 
-// Case 9: Beaconing / C2 Detection
-// workstation-05 (10.0.1.50) beacons to 45.142.212.100:8080 every ~60 seconds
+const { syslogTs, ago, addSeconds } = require('../../utils/time');
+const {
+  randInt, pick, LEGIT_INTERNAL, LEGIT_EXTERNAL, COMMON_USERS, NORMAL_UAS,
+  kv, firewall, streamHttp, suricata, fwBackground, httpBackground, SURICATA_SIGS,
+} = require('../../utils/logfmt');
 
 function generate() {
   const base = new Date();
   base.setHours(8, 0, 0, 0);
 
-  const HOST       = 'fw-edge-01';
-  const INFECTED   = '10.0.1.50';
-  const C2_IP      = '45.142.212.100';
-  const C2_PORT    = 8080;
-  const INTERVAL   = 60; // seconds
-  const JITTER     = 2;  // ±2 seconds jitter
+  const HOST     = 'fw-edge-01';
+  const INFECTED = '10.0.1.50';
+  const C2_IP    = '45.142.212.100';
+  const C2_PORT  = 8080;
 
-  const fwEvents   = [];
+  // ── Firewall events (primary) ────────────────────────────────────────────
+  const fwEvents = [];
 
-  // ── Legitimate traffic (multiple workstations) ────────────────────────────────
-  const workstations = [
-    { ip: '10.0.1.51', name: 'workstation-01' },
-    { ip: '10.0.1.52', name: 'workstation-02' },
-    { ip: '10.0.1.53', name: 'workstation-03' },
-    { ip: '10.0.1.54', name: 'workstation-04' },
-  ];
-  const legitimateDsts = [
-    { ip: '8.8.8.8',         port: 53  },
-    { ip: '1.1.1.1',         port: 53  },
-    { ip: '93.184.216.34',   port: 443 },
-    { ip: '104.21.12.54',    port: 443 },
-    { ip: '151.101.1.69',    port: 443 },
-    { ip: '172.217.14.206',  port: 80  },
-  ];
+  // Background: 6 hours of normal outbound traffic (~7,000 events)
+  const bgStart = ago(base, { hours: 2 });
+  const bgEnd = addSeconds(base, 14400); // 4 hours of beacon + 2 hours before
+  fwEvents.push(...fwBackground({
+    start: bgStart, end: bgEnd, count: 7000,
+  }));
 
-  let bgT = ago(base, { hours: 2 });
-  const bgEnd = addSeconds(base, 14400); // +4 hours
-  while (bgT < bgEnd) {
-    const ws  = workstations[Math.floor(Math.random() * workstations.length)];
-    const dst = legitimateDsts[Math.floor(Math.random() * legitimateDsts.length)];
-    const len = 64 + Math.floor(Math.random() * 1400);
-    fwEvents.push(`${syslogTs(bgT)} ${HOST} kernel: [123.456] iptables: IN=eth1 OUT=eth0 SRC=${ws.ip} DST=${dst.ip} LEN=${len} TTL=64 PROTO=TCP SPT=${40000 + Math.floor(Math.random() * 15000)} DPT=${dst.port}`);
-    bgT = addSeconds(bgT, 5 + Math.floor(Math.random() * 30));
-  }
-
-  // ── Infected host normal traffic ──────────────────────────────────────────────
+  // Infected workstation normal traffic (blends in with everyone else)
   let normalT = ago(base, { hours: 2 });
   while (normalT < bgEnd) {
-    const dst = legitimateDsts[Math.floor(Math.random() * legitimateDsts.length)];
-    const len = 64 + Math.floor(Math.random() * 800);
-    fwEvents.push(`${syslogTs(normalT)} ${HOST} kernel: [124.000] iptables: IN=eth1 OUT=eth0 SRC=${INFECTED} DST=${dst.ip} LEN=${len} TTL=64 PROTO=TCP SPT=${40000 + Math.floor(Math.random() * 15000)} DPT=${dst.port}`);
-    normalT = addSeconds(normalT, 15 + Math.floor(Math.random() * 60));
+    const dst = pick(LEGIT_EXTERNAL);
+    fwEvents.push(firewall(normalT, {
+      src_ip: INFECTED,
+      dest_ip: dst,
+      dest_port: pick([80, 443, 443, 443, 53]),
+      proto: pick([80, 443].includes(dst) ? 'TCP' : 'UDP'),
+      action: 'allow',
+      bytes: randInt(64, 1400),
+      direction: 'outbound',
+      src_port: randInt(40000, 65000),
+    }));
+    normalT = addSeconds(normalT, randInt(10, 90));
   }
 
-  // ── Beacon traffic (every 60 ± 2 seconds from 08:00 onwards) ─────────────────
+  // ── THE SIGNAL: Beacon traffic (every 60 ± 2 seconds from 08:00) ─────────
   let beaconT = new Date(base);
-  const beaconEnd = addSeconds(base, 14400);
+  const beaconEnd = addSeconds(base, 14400); // 4 hours
   while (beaconT < beaconEnd) {
-    const jitter = Math.floor(Math.random() * (JITTER * 2 + 1)) - JITTER;
-    const len = 200 + Math.floor(Math.random() * 100); // Small C2 check-in packet
+    const jitter = randInt(-2, 3); // ±2s
+    const pktLen = randInt(210, 260); // small C2 check-in
+    const respLen = randInt(48, 96); // short acknowledgement
 
-    // Outbound beacon
-    fwEvents.push(`${syslogTs(beaconT)} ${HOST} kernel: [${Date.now() % 99999}.001] iptables: IN=eth1 OUT=eth0 SRC=${INFECTED} DST=${C2_IP} LEN=${len} TTL=64 PROTO=TCP SPT=54321 DPT=${C2_PORT} ACK PSH`);
+    fwEvents.push(firewall(beaconT, {
+      src_ip: INFECTED,
+      dest_ip: C2_IP,
+      dest_port: C2_PORT,
+      proto: 'TCP',
+      action: 'allow',
+      bytes: pktLen,
+      direction: 'outbound',
+      src_port: 54321,
+      flags: 'ACK PSH',
+    }));
+    fwEvents.push(firewall(addSeconds(beaconT, 1), {
+      src_ip: C2_IP,
+      dest_ip: INFECTED,
+      dest_port: 54321,
+      proto: 'TCP',
+      action: 'allow',
+      bytes: respLen,
+      direction: 'inbound',
+      src_port: C2_PORT,
+      flags: 'ACK',
+    }));
 
-    // C2 response (slightly after)
-    const respT = addSeconds(beaconT, 1);
-    fwEvents.push(`${syslogTs(respT)} ${HOST} kernel: [${Date.now() % 99999}.002] iptables: IN=eth0 OUT=eth1 SRC=${C2_IP} DST=${INFECTED} LEN=${50 + Math.floor(Math.random() * 50)} TTL=64 PROTO=TCP SPT=${C2_PORT} DPT=54321 ACK PSH`);
+    beaconT = addSeconds(beaconT, 60 + jitter);
+  }
 
-    beaconT = addSeconds(beaconT, INTERVAL + jitter);
+  // ── HTTP events (web traffic from infected host) ─────────────────────────
+  const httpEvents = [];
+
+  // Normal web traffic from infected workstation (~1,000 events)
+  const bgStart2 = ago(base, { hours: 2 });
+  httpEvents.push(...httpBackground({
+    start: bgStart2, end: bgEnd, count: 1000,
+    destIp: INFECTED,
+  }));
+
+  // Occasional HTTP to C2 domain (disguised as normal web traffic)
+  let c2HttpT = new Date(base);
+  while (c2HttpT < beaconEnd) {
+    const jitter = randInt(-2, 3);
+    httpEvents.push(streamHttp(c2HttpT, {
+      src_ip: INFECTED,
+      dest_ip: C2_IP,
+      http_method: 'POST',
+      uri: `/api/v1/health?token=${randInt(100000, 999999)}`,
+      status: 200,
+      bytes: randInt(200, 500),
+      user_agent: pick(NORMAL_UAS),
+      response_time_ms: randInt(100, 500),
+    }));
+    c2HttpT = addSeconds(c2HttpT, 60 + jitter);
+  }
+
+  // ── Suricata IDS alerts ──────────────────────────────────────────────────
+  const suricataEvents = [];
+
+  // Background IDS noise (~20 events)
+  for (let i = 0; i < 20; i++) {
+    const nt = addSeconds(ago(base, { hours: 2 }), randInt(0, 21600));
+    suricataEvents.push(suricata(nt, {
+      src_ip: pick(LEGIT_INTERNAL),
+      dest_ip: pick(LEGIT_EXTERNAL),
+      dest_port: randInt(1, 65535),
+      proto: 'TCP',
+      action: 'alert',
+      signature: 'ET SCAN Possible Port Scan',
+      severity: 'low',
+      category: 'attempted-recon',
+      sid: 2001216,
+    }));
+  }
+
+  // THE SIGNAL: IDS detects C2 beacon pattern
+  const sig = SURICATA_SIGS.c2_beacon;
+  // Alerts fire periodically as the pattern persists
+  const alertIntervals = [1800, 3600, 7200, 10800, 14400];
+  for (const interval of alertIntervals) {
+    suricataEvents.push(suricata(addSeconds(base, interval), {
+      src_ip: INFECTED,
+      dest_ip: C2_IP,
+      dest_port: C2_PORT,
+      proto: 'TCP',
+      action: 'alert',
+      ...sig,
+    }));
   }
 
   fwEvents.sort();
-  return [{ events: fwEvents, sourcetype: 'firewall', host: HOST }];
+  httpEvents.sort();
+  suricataEvents.sort();
+
+  return [
+    { events: fwEvents, sourcetype: 'firewall', host: HOST },
+    { events: httpEvents, sourcetype: 'stream_http', host: 'web-proxy-01' },
+    { events: suricataEvents, sourcetype: 'suricata', host: HOST },
+  ];
 }
 
 module.exports = { generate };
